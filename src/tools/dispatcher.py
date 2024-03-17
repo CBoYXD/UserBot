@@ -22,7 +22,7 @@ class Dispatcher:
 
     def __get_available_routers(self) -> list[Router]:
         """
-        Retrieves router handlers excluding a set 
+        Retrieves router handlers excluding a set
         of handlers passed over self.__exclude_routers
         """
         if not bool(self.__exclude_routers):

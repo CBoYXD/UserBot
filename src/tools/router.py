@@ -1,4 +1,4 @@
-from typing import Awaitable, Optional, Coroutine, Callable
+from typing import Awaitable, Optional, Callable
 from logging import Logger, getLogger
 import inspect
 from functools import wraps
@@ -54,9 +54,12 @@ class Router:
         """
         Filters the message, returns True if the message is a tag to the client
         """
+
         async def func(ftl, client: Client, msg: Message) -> bool:
             return (
-                (not msg.outgoing) # returns True, if message incomming to client
+                (
+                    not msg.outgoing
+                )  # returns True, if message incomming to client
                 and (
                     (
                         client.me.username in msg.text
@@ -91,9 +94,9 @@ class Router:
                             )
                             == client.me.id  # returns True if the user who was replied to is you
                         )
-                    ) # returns True if 2 conditions above are True
-                ) # returns True if one of conditions above are True
-            ) # returns True if 2 conditions above are True
+                    )  # returns True if 2 conditions above are True
+                )  # returns True if one of conditions above are True
+            )  # returns True if 2 conditions above are True
 
         return create_filter(func, name='tags_me_filter')
 
@@ -124,6 +127,7 @@ class Router:
         """
         Filter messages by param pyro_filter and db_result
         """
+
         async def func(flt, client: Client, update: Update) -> bool:
             pyro_kwargs = (
                 flt.pyro_kwargs if flt.pyro_kwargs is not None else {}
@@ -171,6 +175,7 @@ class Router:
         """
         Prepare handler
         """
+
         @wraps(fn)
         async def wrapper(client: Client, update: Update):
             kwargs = self.dp_kwargs
@@ -363,7 +368,7 @@ class Router:
 
     def get_handlers(self, exclude_handlers: set):
         """
-        Retrieves router handlers excluding a set 
+        Retrieves router handlers excluding a set
         of handlers passed over exclude_handlers
         """
         if exclude_handlers is None:
