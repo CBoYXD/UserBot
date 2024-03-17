@@ -23,9 +23,7 @@ class RedisSettings(BaseModel):
 class Config(BaseSettings):
     userbot: UserBotSettings
     redis: RedisSettings
-    model_config = SettingsConfigDict(
-        env_nested_delimiter='__', env_file=getenv('ENV_FILE', None)
-    )
+    model_config = SettingsConfigDict(env_nested_delimiter='__')
 
 
 @lru_cache
