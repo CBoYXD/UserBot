@@ -49,10 +49,10 @@ async def spam_fun(msg: Message):
     else:
         num = int(msg.text[5:].strip())
         await msg.delete()
-        try:
-            for _ in range(num):
+        for _ in range(num):
+            try:
                 await msg.reply_text(
                     str(msg.reply_to_message.from_user.mention)
                 )
-        except FloodWait as e:
-            await sleep(e.x)
+            except FloodWait as e:
+                await sleep(e.x)
