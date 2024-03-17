@@ -63,7 +63,5 @@ async def all_ignore_tags_in_group(msg: types.Message, redis: Redis):
         db_kwargs=dict(name='ignore_chats', start=0, end=-1),
     )
 )
-async def ignore_chats(
-    msg: types.Message, client: Client
-):
+async def ignore_chats(msg: types.Message, client: Client):
     await client.read_chat_history(msg.chat.id)
