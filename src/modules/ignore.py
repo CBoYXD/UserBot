@@ -64,7 +64,6 @@ async def all_ignore_tags_in_group(msg: types.Message, redis: Redis):
     )
 )
 async def ignore_chats(
-    msg: types.Message, client: Client, redis: Redis
+    msg: types.Message, client: Client
 ):
-    await msg.reply('Ок')
     await client.read_chat_history(msg.chat.id)
