@@ -42,10 +42,17 @@ async def type_fun(msg: Message):
     | filters.command('spam', prefixes='.')
 )
 async def spam_fun(msg: Message):
-    num = int(msg.text[5:].strip())
-    await msg.delete()
-    try:
-        for n in range(num):
-            await msg.reply_text(str(n))
-    except FloodWait as e:
-        await sleep(e.x)
+    if not bool(msg.reply_to_message):
+        await msg.edit('Треба відповіддю на повідомлення')
+        await sleep(3)
+        await msg.delete()
+    else:
+        num = int(msg.text[5:].strip())
+        await msg.delete()
+        try:
+            for _ in range(num):
+                await msg.reply_text(
+                    str(msg.reply_to_message.from_user.mention)
+                )
+        except FloodWait as e:
+            await sleep(e.x)
