@@ -61,12 +61,8 @@ class Router:
                     not msg.outgoing
                 )  # returns True, if message incomming to client
                 and (
-                    (
-                        client.me.username in msg.text
-                        if bool(msg.text)
-                        else False
-                        # returns True if message has your username
-                    )
+                    (msg.mentioned)
+                    # returns True if message is mention
                     or (
                         bool(
                             msg.reply_to_message_id
