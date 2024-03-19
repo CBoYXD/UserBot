@@ -27,7 +27,7 @@ def main() -> None:
     setup_logging()
     config = get_config()
     redis = get_redis_engine(config.redis)
-    runtime_settings = RuntimeSettings(".config/settings.json")
+    runtime_settings = RuntimeSettings('.config/settings.json')
     runtime_settings.load()
     client = Client(
         name='userbot',
