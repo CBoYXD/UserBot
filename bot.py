@@ -7,8 +7,8 @@ from src.config import (
     RuntimeSettings,
     get_redis_engine,
 )
-from src.tools.dispatcher import Dispatcher
-from src.modules import routers
+from src.bot.tools.dispatcher import Dispatcher
+from src.bot.modules import routers
 
 
 def setup_logging() -> None:
