@@ -3,7 +3,7 @@ version: '3.9'
 services:
 
   redis_db:
-    image: redis
+    image: ub_redis_db
     container_name: redis_db
     restart: always
     volumes:
@@ -11,6 +11,9 @@ services:
     command: redis-server --port $REDIS__PORT --save 20 1 --loglevel notice --requirepass $REDIS__PASSWORD
     env_file:
       - ".env"
+    build: 
+      context: .
+      dockerfile: .docker/redis.Dockerfile
     logging:
       driver: "json-file"
       options:
@@ -28,7 +31,7 @@ services:
      - "redis_db:redis"
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: .docker/ub.Dockerfile
     working_dir: "/usr/src/userbot"
     volumes:
       - .:/usr/src/userbot
