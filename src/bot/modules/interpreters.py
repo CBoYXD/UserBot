@@ -50,21 +50,8 @@ async def exec_code(msg: Message, piston: PistonClient):
 )
 async def exec_python_code(msg: Message, piston, client, redis):
     code = '\n'.join(msg.text.split('\n')[1:])
-    all_vars = {
-        **globals(),
-        **locals(),
-        'client': client,
-        'msg': msg,
-        'piston': piston,
-        'redis': redis,
-    }
     res = await meval(
-        code,
-        all_vars,
-        client=client,
-        msg=msg,
-        piston=piston,
-        redis=redis,
+        globs=globals(), **locals(), intrp_router=intrp_router
     )
     from_terminal = ''
     input_msg = '**Input:**\n' + f'```python\n' + f'{code}\n' + f'```'
