@@ -8,6 +8,7 @@ from src.config import (
     get_redis_engine,
 )
 from src.bot.tools.dispatcher import Dispatcher
+from src.services.code_pars.piston import PistonClient
 from src.bot.modules import routers
 
 
@@ -40,6 +41,7 @@ def main() -> None:
         runtime_settings=runtime_settings,
         routers=routers,
         redis=redis,
+        piston=PistonClient(),
     )
     dp.run()
 
