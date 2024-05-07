@@ -26,19 +26,16 @@ async def exec_code(msg: Message, piston: PistonClient):
     parse_code = ParseCodeForPiston.parse_tg_msg(msg.text)
     piston_code = await piston.execute(parse_code)
     input_msg = (
-        '**Input:**\n'
-        + f'```{parse_code.language}\n'
-        + f'{parse_code.code}\n'
-        + f'```'
+        '<b>Input:</b>'
+        + '\n'
+        + f'<pre language="{parse_code.language}">{parse_code.code}</pre>'
     )
     output_msg = (
-        '**Output:**\n'
-        + '```output\n'
-        + f'{piston_code.output}\n'
-        + '```'
+        '<b>Output:</b>\n'
+        + f'<pre language="output">{piston_code.output}</pre>'
     )
     ready_msg = input_msg + '\n\n' + output_msg
-    await msg.edit(ready_msg)
+    await msg.edit(ready_msg, parse_mode=ParseMode.HTML)
 
 
 @intrp_router.message(
@@ -54,18 +51,22 @@ async def exec_python_code(msg: Message, piston, client, redis):
         globs=globals(), **locals(), intrp_router=intrp_router
     )
     from_terminal = ''
-    input_msg = '**Input:**\n' + f'```python\n' + f'{code}\n' + f'```'
-    output_msg = '**Output:**\n' + '```output\n' + f'{res}\n' + '```'
+    input_msg = (
+        '<b>Input:</b>'
+        + '\n'
+        + f'<pre language="python">{code}</pre>'
+    )
+    output_msg = (
+        '<b>Output:</b>\n' + f'<pre language="output">{res}</pre>'
+    )
     if bool(from_terminal):
         from_terminal_msg = (
-            '**From terminal:**\n'
-            + '```output\n'
-            + f'{from_terminal}\n'
-            + '```'
+            '<b>Output:</b>\n'
+            + f'<pre language="output">{from_terminal}</pre>'
         )
     else:
         from_terminal_msg = ''
     ready_msg = (
         input_msg + '\n\n' + output_msg + '\n\n' + from_terminal_msg
     )
-    await msg.edit(ready_msg)
+    await msg.edit(ready_msg, parse_mode=ParseMode.HTML)
