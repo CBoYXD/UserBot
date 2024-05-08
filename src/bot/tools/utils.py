@@ -41,7 +41,3 @@ def get_msg_text(msg: Message):
 
 def get_ready_msg(*args: list):
     return '\n\n'.join([arg for arg in args if bool(arg)])
-
-
-async def exec_use_file(redis: Redis, name_of_file: str) -> str:
-    return await redis.get(name_of_file)
