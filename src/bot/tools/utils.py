@@ -1,4 +1,5 @@
 from pyrogram.types import Message
+from redis.asyncio import Redis
 from ...services.code_pars.base import ParseCommands
 
 
@@ -42,9 +43,5 @@ def get_ready_msg(*args: list):
     return '\n\n'.join([arg for arg in args if bool(arg)])
 
 
-def exec_commands(commands: ParseCommands, **kwargs):
-    if commands:
-        pass
-    else:
-        if commands.save_file:
-            pass
+async def exec_use_file(redis: Redis, name_of_file: str) -> str:
+    return await redis.get(name_of_file)
