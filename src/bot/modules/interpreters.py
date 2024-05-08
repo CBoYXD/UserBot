@@ -1,4 +1,3 @@
-from ..tools.router import Router
 from pyrogram import filters, Client
 from pyrogram.errors import FloodWait
 from pyrogram.types import Message
@@ -7,82 +6,63 @@ from meval import meval
 from asyncio import sleep
 from logging import getLogger
 from time import process_time
-from src.services.code_pars.piston import (
-    PistonClient,
-    ParseCodeForPiston,
-)
+from redis.asyncio import Redis
+from ..tools.router import Router
+from ..tools import utils
+from ...services.code_pars.piston import PistonClient
+from ...services.code_pars.base import ParseCode
 
 
 intrp_router = Router('intrp')
+intrp_router.router_filters = filters.me
 
 
 @intrp_router.message(
-    filters.me
-    & (
-        filters.command('код', prefixes='.')
-        | filters.command('code', prefixes='.')
-    )
+    filters.command('код', prefixes='.')
+    | filters.command('code', prefixes='.')
 )
-async def exec_code(msg: Message, piston: PistonClient):
-    parse_code = ParseCodeForPiston.parse_tg_msg(msg.text)
+async def exec_code(msg: Message, piston: PistonClient, redis: Redis):
+    parse_code = ParseCode.parse_tg_msg(utils.get_msg_text(msg))
     start_process_time = process_time()
     piston_code = await piston.execute(parse_code)
-    process_time_msg = (
-        f'<b>Process time: {process_time()-start_process_time}</b>'
-    )
-    input_msg = (
-        '<b>Input:</b>'
-        + '\n'
-        + f'<pre language="{parse_code.language}">{parse_code.code}</pre>'
-    )
-    output_msg = (
-        '<b>Output:</b>\n'
-        + f'<pre language="output">{piston_code.output}</pre>'
-    )
-    ready_msg = (
-        input_msg + '\n\n' + output_msg + '\n\n' + process_time_msg
+    end_process_time = process_time()
+    utils.exec_commands(parse_code.commands)
+    ready_msg = utils.get_ready_msg(
+        utils.get_input_msg(parse_code.language, parse_code.code),
+        utils.get_output_msg(piston_code.output),
+        utils.get_process_time_msg(
+            start_process_time, end_process_time
+        ),
     )
     await msg.edit(ready_msg, parse_mode=ParseMode.HTML)
 
 
 @intrp_router.message(
-    filters.me
-    & (
-        filters.command('пу', prefixes='.')
-        | filters.command('py', prefixes='.')
-    )
+    filters.command('пу', prefixes='.')
+    | filters.command('py', prefixes='.')
 )
-async def exec_python_code(msg: Message, piston, client, redis):
-    code = '\n'.join(msg.text.split('\n')[1:])
+async def exec_python_code(
+    msg: Message, redis: Redis, piston, client
+):
+    parse_code = ParseCode.parse_tg_msg(
+        utils.get_msg_text(msg), 'python'
+    )
     start_process_time = process_time()
     res = await meval(
-        globs=globals(), **locals(), intrp_router=intrp_router
+        globs=globals(),
+        **locals(),
+        intrp_router=intrp_router,
+        code=parse_code.code,
     )
-    process_time_msg = (
-        f'<b>Process time: {process_time()-start_process_time}</b>'
-    )
-    from_terminal = ''
-    input_msg = (
-        '<b>Input:</b>'
-        + '\n'
-        + f'<pre language="python">{code}</pre>'
-    )
-    output_msg = (
-        '<b>Output:</b>\n' + f'<pre language="output">{res}</pre>'
-    )
-    if bool(from_terminal):
-        from_terminal_msg = (
-            '<b>Output:</b>\n'
-            + f'<pre language="output">{from_terminal}</pre>'
-        )
-    else:
-        from_terminal_msg = ''
-    ready_msg = (
-        input_msg
-        + '\n\n'
-        + output_msg
-        + from_terminal_msg
-        + '\n\n'
-        + process_time_msg
+    end_process_time = process_time()
+    from_terminal = utils.get_terminal_output()
+    utils.exec_commands(parse_code.commands)
+    ready_msg = utils.get_ready_msg(
+        utils.get_input_msg('python', parse_code.code),
+        utils.get_output_msg(res),
+        utils.get_from_terminal_msg(from_terminal),
+        utils.get_process_time_msg(
+            start_process_time, end_process_time
+        ),
     )
     await msg.edit(ready_msg, parse_mode=ParseMode.HTML)
