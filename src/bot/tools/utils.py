@@ -31,12 +31,8 @@ def get_terminal_output() -> str:
     pass
 
 
-def get_msg_text(msg: Message):
-    return (
-        msg.text
-        if msg.reply_to_message is None
-        else msg.text + '\n' + msg.reply_to_message.text
-    )
+def get_msg_text_with_reply(my_msg: str, msg: Message) -> str:
+    return my_msg + '\n' + msg.reply_to_message.text
 
 
 def get_ready_msg(*args: list):

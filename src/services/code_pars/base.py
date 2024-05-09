@@ -8,13 +8,14 @@ from typing import Optional
 class ParseCommands:
     save_file: bool
     use_file: bool
+    use_reply: bool
     kwargs: dict
     # will be more commands
 
     @classmethod
     @property
     def all_commands(self) -> list[str]:
-        return ['!s', '!u']
+        return ['!s', '!u', '!r']
 
     @staticmethod
     def __use_file(command: str) -> dict:
@@ -45,6 +46,7 @@ class ParseCommands:
         ]  # create list, remove filter command
         save_file = False
         use_file = False
+        use_reply = False
         kwargs = {}
         if bool(commands):  # if command in list
             for command in commands:
@@ -63,9 +65,14 @@ class ParseCommands:
                         kwargs.update(
                             **ParseCommands.__use_file(command)
                         )
+                    if command.strip() == '!r':
+                        use_reply = True
 
         return ParseCommands(
-            save_file=save_file, use_file=use_file, kwargs=kwargs
+            save_file=save_file,
+            use_file=use_file,
+            use_reply=use_reply,
+            kwargs=kwargs,
         )
 
 

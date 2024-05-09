@@ -22,8 +22,16 @@ intrp_router.router_filters = filters.me
     | filters.command('code', prefixes='.')
 )
 async def exec_code(msg: Message, piston: PistonClient, redis: Redis):
-    msg_text_lines = utils.get_msg_text(msg).split('\n')
-    parse_commands = ParseCommands.parse_tg_msg(msg_text_lines[0])
+    my_msg = msg.text
+    my_msg_lines = my_msg.split('\n')
+    parse_commands = ParseCommands.parse_tg_msg(my_msg_lines[0])
+    if parse_commands.use_reply:
+        message_with_reply = utils.get_msg_text_with_reply(
+            my_msg, msg
+        )
+        msg_text_lines = message_with_reply.split('\n')
+    else:
+        msg_text_lines = my_msg_lines
     code = None
     language = None
     if parse_commands:
@@ -64,8 +72,16 @@ async def exec_code(msg: Message, piston: PistonClient, redis: Redis):
 async def exec_python_code(
     msg: Message, redis: Redis, piston, client
 ):
-    msg_text_lines = utils.get_msg_text(msg).split('\n')
-    parse_commands = ParseCommands.parse_tg_msg(msg_text_lines[0])
+    my_msg = msg.text
+    my_msg_lines = my_msg.split('\n')
+    parse_commands = ParseCommands.parse_tg_msg(my_msg_lines[0])
+    if parse_commands.use_reply:
+        message_with_reply = utils.get_msg_text_with_reply(
+            my_msg, msg
+        )
+        msg_text_lines = message_with_reply.split('\n')
+    else:
+        msg_text_lines = my_msg_lines
     code = None
     if parse_commands:
         if parse_commands.use_file:
