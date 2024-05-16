@@ -18,4 +18,7 @@ class PistonClient:
                 files=[File(content=parse_code.code)],
             )
         )
+        if data.compile:
+            if data.is_err:
+                return data.compile
         return data.run
