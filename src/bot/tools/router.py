@@ -49,53 +49,6 @@ class Router:
         else:
             raise AttributeError('No Redis in dp_kwargs')
 
-    @staticmethod
-    def tags_me_filter() -> Filter:
-        """
-        Filters the message, returns True if the message is a tag to the client
-        """
-
-        async def func(ftl, client: Client, msg: Message) -> bool:
-            return (
-                (
-                    not msg.outgoing
-                )  # returns True, if message incomming to client
-                and (
-                    (msg.mentioned)
-                    # returns True if message is mention
-                    or (
-                        bool(
-                            msg.reply_to_message_id
-                        )  # return True if message is reply
-                        and (
-                            (
-                                msg.reply_to_message.from_user.id
-                                if (
-                                    msg.reply_to_message.from_user.id
-                                    is not None
-                                    if (
-                                        (
-                                            msg.reply_to_message.from_user
-                                            is not None
-                                        )
-                                        if (
-                                            msg.reply_to_message
-                                            is not None
-                                        )
-                                        else False  # return False if message doesn`t have msg.reply_to_message
-                                    )
-                                    else False  # return False if message doesn`t have msg.reply_to_message.from_user
-                                )
-                                else None  # returns None, if all condidions above are False
-                            )
-                            == client.me.id  # returns True if the user who was replied to is you
-                        )
-                    )  # returns True if 2 conditions above are True
-                )  # returns True if one of conditions above are True
-            )  # returns True if 2 conditions above are True
-
-        return create_filter(func, name='tags_me_filter')
-
     @property
     def dp_kwargs(self) -> dict:
         return self.__dp_kwargs
