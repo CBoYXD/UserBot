@@ -9,6 +9,7 @@ from src.config import (
 )
 from src.bot.tools.dispatcher import Dispatcher
 from src.services.code_pars.piston import PistonClient
+from src.services.gemini import GeminiClient
 from src.bot.modules import routers
 
 
@@ -36,12 +37,17 @@ def main() -> None:
         api_hash=config.userbot.api_hash,
         parse_mode=ParseMode.MARKDOWN,
     )
+    gemini = GeminiClient(
+        api_key=config.gemini.api_key,
+        model=config.gemini.model,
+    )
     dp = Dispatcher(
         client=client,
         runtime_settings=runtime_settings,
         routers=routers,
         redis=redis,
         piston=PistonClient(),
+        gemini=gemini,
     )
     dp.run()
 

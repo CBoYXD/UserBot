@@ -68,9 +68,11 @@ class Dispatcher:
     def update_runtime_settings(self) -> None:
         self.__exclude_handlers = set(
             self.__runtime_settings.get('exclude_commands')
+            or []
         )
         self.__exclude_routers = set(
             self.__runtime_settings.get('exclude_routers')
+            or []
         )
 
     def restart(self) -> None:

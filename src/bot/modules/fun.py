@@ -34,7 +34,7 @@ async def type_fun(msg: Message):
             await sleep(0.05)
 
         except FloodWait as e:
-            await sleep(e.x)
+            await sleep(e.value)
 
 
 @fun_router.message(
@@ -55,4 +55,4 @@ async def spam_fun(msg: Message):
                     str(msg.reply_to_message.from_user.mention)
                 )
             except FloodWait as e:
-                await sleep(e.x)
+                await sleep(e.value)

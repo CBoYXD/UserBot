@@ -149,3 +149,4 @@ def get_lang_by_file_ext(file_ext: str) -> str:
     for lang, ext in lang_extensions.items():
         if file_ext == ext or file_ext in ext:
             return lang
+    return file_ext

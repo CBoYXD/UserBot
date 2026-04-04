@@ -20,9 +20,15 @@ class RedisSettings(BaseModel):
     password: str
 
 
+class GeminiSettings(BaseModel):
+    api_key: str = ''
+    model: str = 'gemini-2.5-flash'
+
+
 class Config(BaseSettings):
     userbot: UserBotSettings
     redis: RedisSettings
+    gemini: GeminiSettings = GeminiSettings()
     model_config = SettingsConfigDict(env_nested_delimiter='__')
 
 
@@ -48,7 +54,11 @@ class RuntimeSettings:
         self.path = file_path
         self.logger = getLogger('RuntimeSettings')
         self.data = {}
-        self.modified = path.getmtime(file_path)
+        self.modified = (
+            path.getmtime(file_path)
+            if path.exists(file_path)
+            else 0
+        )
 
     def get(self, key, default=None):
         return self.data.get(key, default)

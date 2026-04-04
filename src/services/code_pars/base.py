@@ -1,79 +1,57 @@
 from __future__ import annotations
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from .utils import get_lang_by_file_ext
-from typing import Optional
+
+
+ALL_COMMANDS = ('!s', '!u', '!r')
 
 
 @dataclass
 class ParseCommands:
-    save_file: bool
-    use_file: bool
-    use_reply: bool
-    kwargs: dict
-    # will be more commands
-
-    @classmethod
-    @property
-    def all_commands(self) -> list[str]:
-        return ['!s', '!u', '!r']
+    save_file: bool = False
+    use_file: bool = False
+    use_reply: bool = False
+    kwargs: dict = field(default_factory=dict)
 
     @staticmethod
-    def __use_file(command: str) -> dict:
+    def _parse_file_command(command: str) -> dict:
         name_of_file = command[3:]
-        dot_in_file = name_of_file.index('.')
-        file_ext = name_of_file[dot_in_file + 1 :]
-        return {
-            'name_of_file': name_of_file,
-            'language': get_lang_by_file_ext(file_ext),
-        }
-
-    @staticmethod
-    def __save_file(command: str) -> dict:
-        name_of_file = command[3:]
-        dot_in_file = name_of_file.index('.')
-        file_ext = name_of_file[dot_in_file + 1 :]
+        if '.' not in name_of_file:
+            return {'name_of_file': name_of_file}
+        dot_idx = name_of_file.rindex('.')
+        file_ext = name_of_file[dot_idx + 1:]
         return {
             'name_of_file': name_of_file,
             'language': get_lang_by_file_ext(file_ext),
         }
 
     @classmethod
-    def parse_tg_msg(cls, commands_line: str):
+    def parse_tg_msg(
+        cls, commands_line: str
+    ) -> ParseCommands:
         commands = [
-            command
-            for command in commands_line.split()
-            if command.startswith('!')
-        ]  # create list, remove filter command
-        save_file = False
-        use_file = False
-        use_reply = False
-        kwargs = {}
-        if bool(commands):  # if command in list
-            for command in commands:
-                if command[:2] not in cls.all_commands:
-                    return None
-                else:
-                    if command.startswith(
-                        '!s'
-                    ):  # use all separators like - or .
-                        save_file = True
-                        kwargs.update(
-                            **ParseCommands.__save_file(command)
-                        )
-                    if command.startswith('!u'):
-                        use_file = True
-                        kwargs.update(
-                            **ParseCommands.__use_file(command)
-                        )
-                    if command.strip() == '!r':
-                        use_reply = True
-
-        return ParseCommands(
-            save_file=save_file,
-            use_file=use_file,
-            use_reply=use_reply,
-            kwargs=kwargs,
-        )
+            part
+            for part in commands_line.split()
+            if part.startswith('!')
+        ]
+        result = cls()
+        for command in commands:
+            prefix = command[:2]
+            if prefix not in ALL_COMMANDS:
+                continue
+            if prefix == '!s':
+                result.save_file = True
+                result.kwargs.update(
+                    cls._parse_file_command(command)
+                )
+            elif prefix == '!u':
+                result.use_file = True
+                result.kwargs.update(
+                    cls._parse_file_command(command)
+                )
+            elif command.strip() == '!r':
+                result.use_reply = True
+        return result
 
 
 @dataclass
@@ -83,11 +61,15 @@ class ParseCode:
 
     @classmethod
     def parse_tg_msg(
-        cls, code_lines: list[str], language: str = None
+        cls,
+        code_lines: list[str],
+        language: str | None = None,
     ) -> ParseCode:
-        index = 0  # If language is None mus be another list index
+        idx = 0
         if language is None:
-            language = code_lines[index]
-            index += 1
-        code = '\n'.join(code_lines[index:])
+            if not code_lines:
+                return cls(language='text', code='')
+            language = code_lines[idx].strip()
+            idx += 1
+        code = '\n'.join(code_lines[idx:])
         return cls(language=language, code=code)

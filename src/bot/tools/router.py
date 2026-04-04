@@ -58,7 +58,7 @@ class Router:
         self.__dp_kwargs = kwargs
 
     @property
-    def router_filters(self, user_filter) -> Filter:
+    def router_filters(self) -> Filter:
         return self.__router_filters
 
     @router_filters.setter
@@ -127,10 +127,16 @@ class Router:
 
         @wraps(fn)
         async def wrapper(client: Client, update: Update):
-            kwargs = self.dp_kwargs
-            kwargs.update({'client': client, 'logger': self.logger})
+            kwargs = {
+                **self.dp_kwargs,
+                'client': client,
+                'logger': self.logger,
+            }
 
-            return await fn(update, **self.prepare_kwargs(fn, kwargs))
+            return await fn(
+                update,
+                **self.prepare_kwargs(fn, kwargs),
+            )
 
         return wrapper
 
@@ -295,10 +301,12 @@ class Router:
 
         return decorator
 
-    def disconnect(self) -> Callable:
+    def disconnect(self, group: int = 0) -> Callable:
         def decorator(func: Callable) -> Callable:
             func = self.inject(func)
-            self.__handlers.append(handlers.DisconnectHandler(func))
+            self.__handlers.append(
+                (handlers.DisconnectHandler(func), group)
+            )
 
             return func
 

@@ -17,6 +17,7 @@ pydantic = "^2.6.3"
 pydantic-settings = "^2.2.1"
 piston-rspy = "^0.4.3"
 meval = "^2.5"
+google-genai = ">=1.0.0"
 
 
 [build-system]
