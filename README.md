@@ -10,11 +10,18 @@ git clone https://github.com/CBoYXD/UserBot.git
 
 1) [Install Docker](https://docs.docker.com/engine/install/) (if not already installed)
 2) Start Docker
-3) Create `.env` from `example.env` and set `OPENAI__API_KEY`
+3) Create `.env` from `example.env`
 4) Run project
-   
+
 ```bash
 docker compose up
 ```
 
-### 3. Enjoy using the userbot 😊
+### 3. Connect Codex OAuth
+
+1) Send `.codexlogin` in Telegram
+2) Open the URL and sign in with ChatGPT/Codex
+3) Copy the full redirect URL from the browser
+4) Send `.codexauth <redirect_url>`
+
+### 4. Enjoy using the userbot

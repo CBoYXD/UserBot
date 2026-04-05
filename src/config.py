@@ -1,7 +1,7 @@
 from pydantic import BaseModel
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from functools import lru_cache
-from os import path, getenv
+from os import path
 from logging import getLogger
 from redis.asyncio import Redis
 import json
@@ -20,16 +20,16 @@ class RedisSettings(BaseModel):
     password: str
 
 
-class OpenAISettings(BaseModel):
-    api_key: str = ''
-    model: str = 'gpt-5-codex'
+class CodexSettings(BaseModel):
+    model: str = 'gpt-5.4'
     reasoning_effort: str = 'medium'
+    credentials_path: str = '.config/codex-oauth.json'
 
 
 class Config(BaseSettings):
     userbot: UserBotSettings
     redis: RedisSettings
-    openai: OpenAISettings = OpenAISettings()
+    codex: CodexSettings = CodexSettings()
     model_config = SettingsConfigDict(env_nested_delimiter='__')
 
 
@@ -39,8 +39,10 @@ def get_config() -> Config:
 
 
 def get_redis_engine(
-    db_config: RedisSettings = get_config().redis,
+    db_config: RedisSettings | None = None,
 ) -> Redis:
+    if db_config is None:
+        db_config = get_config().redis
     return Redis(
         host=db_config.host,
         port=db_config.port,
