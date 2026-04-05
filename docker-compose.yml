@@ -1,9 +1,6 @@
-version: '3.9'
-
 services:
-
   redis_db:
-    image: ub_redis_db
+    image: redis:7
     container_name: redis_db
     restart: always
     volumes:
@@ -11,27 +8,21 @@ services:
     command: redis-server --port $REDIS__PORT --save 20 1 --loglevel notice --requirepass $REDIS__PASSWORD
     env_file:
       - ".env"
-    build: 
-      context: .
-      dockerfile: .docker/redis.Dockerfile
     logging:
       driver: "json-file"
       options:
         max-size: "200k"
         max-file: "10"
-    
-    
+
   userbot:
     image: "userbot"
     container_name: "userbot"
     stop_signal: SIGINT
     depends_on:
       - redis_db
-    links:
-     - "redis_db:redis"
     build:
       context: .
-      dockerfile: .docker/ub.Dockerfile
+      dockerfile: Dockerfile
     working_dir: "/usr/src/userbot"
     volumes:
       - .:/usr/src/userbot

@@ -10,14 +10,12 @@ LABEL maintainer="https://github.com/CBoYXD" version="1.0.0"
 WORKDIR /usr/src/userbot
 
 RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
-
 RUN pip install --no-cache-dir --upgrade pip uv
 
 COPY pyproject.toml uv.lock README.md /usr/src/userbot/
-
 RUN uv sync --frozen --no-dev
 
 COPY bot.py /usr/src/userbot/
 COPY src /usr/src/userbot/src
 
-CMD uv run python bot.py
+CMD ["uv", "run", "python", "bot.py"]
