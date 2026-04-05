@@ -5,8 +5,8 @@ from pyrogram.enums import ParseMode
 from pyrogram.types import Message
 from redis.asyncio import Redis
 
-from ..tools.router import Router
-from ...services.codex import CodexClient
+from src.bot.tools.router import Router
+from src.services.codex import CodexClient
 
 
 ai_router = Router('ai')

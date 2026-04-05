@@ -1,7 +1,9 @@
-from ...config import RuntimeSettings
-from .router import Router
-from pyrogram import Client
 from logging import getLogger
+
+from pyrogram import Client
+
+from src.bot.tools.router import Router
+from src.config import RuntimeSettings
 
 
 class Dispatcher:

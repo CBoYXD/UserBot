@@ -1,6 +1,6 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
-from .utils import get_lang_by_file_ext
+from src.services.code_pars.utils import get_lang_by_file_ext
 
 
 ALL_COMMANDS = ('!s', '!u', '!r')

@@ -1,15 +1,20 @@
 import io
 import sys
-from pyrogram import filters, Client
-from pyrogram.types import Message
-from pyrogram.enums import ParseMode
-from meval import meval
 from time import process_time
+
+from meval import meval
+from pyrogram import Client, filters
+from pyrogram.enums import ParseMode
+from pyrogram.types import Message
 from redis.asyncio import Redis
-from ..tools.router import Router
-from ..tools import utils
-from ...services.code_pars.piston import PistonClient
-from ...services.code_pars.base import ParseCode, ParseCommands
+
+from src.bot.tools import utils
+from src.bot.tools.router import Router
+from src.services.code_pars.base import (
+    ParseCode,
+    ParseCommands,
+)
+from src.services.code_pars.piston import PistonClient
 
 
 intrp_router = Router('intrp')

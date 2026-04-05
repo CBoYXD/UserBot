@@ -4,7 +4,7 @@ from piston_rspy import (
     Executor,
     ExecResult,
 )
-from .base import ParseCode
+from src.services.code_pars.base import ParseCode
 
 
 class PistonClient:

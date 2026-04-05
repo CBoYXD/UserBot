@@ -1,8 +1,10 @@
-from ..tools.router import Router
+from asyncio import sleep
+
 from pyrogram import filters
 from pyrogram.errors import FloodWait
 from pyrogram.types import Message
-from asyncio import sleep
+
+from src.bot.tools.router import Router
 
 fun_router = Router('fun')
 fun_router.router_filters = filters.me
