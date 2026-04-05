@@ -10,7 +10,8 @@ git clone https://github.com/CBoYXD/UserBot.git
 
 1) [Install Docker](https://docs.docker.com/engine/install/) (if not already installed)
 2) Start Docker
-3) Run project
+3) Create `.env` from `example.env` and set `OPENAI__API_KEY`
+4) Run project
    
 ```bash
 docker compose up

@@ -1,28 +1,26 @@
-[tool.poetry]
+[project]
 name = "userbot"
 version = "0.1.0"
-description = ""
-authors = ["CBoYXD <python.rust.cpp@gmail.com>"]
-license = "MIT"
+description = "Telegram userbot with OpenAI Codex integration"
 readme = "README.md"
+requires-python = ">=3.10,<3.13"
+license = {text = "MIT"}
+authors = [{name = "CBoYXD", email = "python.rust.cpp@gmail.com"}]
+dependencies = [
+    "redis[hiredis]==5.0.2",
+    "environs==10.3.0",
+    "pyrogram==2.0.106",
+    "betterlogging==1.0.0",
+    "tgcrypto==1.2.5",
+    "pydantic==2.6.3",
+    "pydantic-settings==2.2.1",
+    "piston-rspy==0.4.3",
+    "meval==2.5",
+    "openai>=1.0.0",
+]
 
-[tool.poetry.dependencies]
-python = ">=3.10,<3.13"
-redis = {extras = ["hiredis"], version = "^5.0.2"}
-environs = "^10.3.0"
-pyrogram = "^2.0.106"
-betterlogging = "^1.0.0"
-tgcrypto = "^1.2.5"
-pydantic = "^2.6.3"
-pydantic-settings = "^2.2.1"
-piston-rspy = "^0.4.3"
-meval = "^2.5"
-google-genai = ">=1.0.0"
-
-
-[build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+[tool.uv]
+package = false
 
 [tool.ruff]
 # Exclude a variety of commonly ignored directories.

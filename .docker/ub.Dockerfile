@@ -10,7 +10,7 @@ RUN apt update && apt upgrade -y
 
 COPY . /usr/src/userbot
 
-RUN pip install --upgrade pip && \
-    pip install --requirement requirements.txt
+RUN pip install --upgrade pip uv && \
+    uv sync --no-dev
 
-CMD python3 bot.py
+CMD uv run python bot.py

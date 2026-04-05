@@ -9,7 +9,7 @@ from src.config import (
 )
 from src.bot.tools.dispatcher import Dispatcher
 from src.services.code_pars.piston import PistonClient
-from src.services.gemini import GeminiClient
+from src.services.openai import OpenAIClient
 from src.bot.modules import routers
 
 
@@ -37,9 +37,10 @@ def main() -> None:
         api_hash=config.userbot.api_hash,
         parse_mode=ParseMode.MARKDOWN,
     )
-    gemini = GeminiClient(
-        api_key=config.gemini.api_key,
-        model=config.gemini.model,
+    openai = OpenAIClient(
+        api_key=config.openai.api_key,
+        model=config.openai.model,
+        reasoning_effort=config.openai.reasoning_effort,
     )
     dp = Dispatcher(
         client=client,
@@ -47,7 +48,7 @@ def main() -> None:
         routers=routers,
         redis=redis,
         piston=PistonClient(),
-        gemini=gemini,
+        openai=openai,
     )
     dp.run()
 

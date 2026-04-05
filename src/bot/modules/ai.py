@@ -3,7 +3,7 @@ from pyrogram import filters
 from pyrogram.types import Message
 from pyrogram.enums import ParseMode
 from ..tools.router import Router
-from ...services.gemini import GeminiClient
+from ...services.openai import OpenAIClient
 
 
 ai_router = Router('ai')
@@ -24,8 +24,8 @@ MAX_HISTORY = 20
     filters.command('аі', prefixes='.')
     | filters.command('ai', prefixes='.')
 )
-async def ai_ask(msg: Message, gemini: GeminiClient):
-    """Single question to Gemini AI."""
+async def ai_ask(msg: Message, openai: OpenAIClient):
+    """Single question to the AI model."""
     prompt = _extract_prompt(msg)
     if not prompt:
         await msg.edit(
@@ -40,7 +40,7 @@ async def ai_ask(msg: Message, gemini: GeminiClient):
     )
 
     try:
-        response = await gemini.generate(
+        response = await openai.generate(
             prompt=prompt,
             system_instruction=SYSTEM_PROMPT,
         )
@@ -60,7 +60,7 @@ async def ai_ask(msg: Message, gemini: GeminiClient):
     filters.command('чат', prefixes='.')
     | filters.command('chat', prefixes='.')
 )
-async def ai_chat(msg: Message, gemini: GeminiClient):
+async def ai_chat(msg: Message, openai: OpenAIClient):
     """Chat with context memory per chat."""
     prompt = _extract_prompt(msg)
     if not prompt:
@@ -87,12 +87,12 @@ async def ai_chat(msg: Message, gemini: GeminiClient):
     )
 
     try:
-        response = await gemini.chat(
+        response = await openai.chat(
             messages=history,
             system_instruction=SYSTEM_PROMPT,
         )
         history.append(
-            {'role': 'model', 'text': response}
+            {'role': 'assistant', 'text': response}
         )
 
         text = (
@@ -127,12 +127,12 @@ async def ai_chat_clear(msg: Message):
     | filters.command('aimodel', prefixes='.')
 )
 async def ai_model_info(
-    msg: Message, gemini: GeminiClient
+    msg: Message, openai: OpenAIClient
 ):
     """Show current AI model."""
     await msg.edit(
         f'<b>AI Model:</b> <code>'
-        f'{escape(gemini.model)}</code>',
+        f'{escape(openai.model)}</code>',
         parse_mode=ParseMode.HTML,
     )
 

@@ -20,15 +20,16 @@ class RedisSettings(BaseModel):
     password: str
 
 
-class GeminiSettings(BaseModel):
+class OpenAISettings(BaseModel):
     api_key: str = ''
-    model: str = 'gemini-2.5-flash'
+    model: str = 'gpt-5-codex'
+    reasoning_effort: str = 'medium'
 
 
 class Config(BaseSettings):
     userbot: UserBotSettings
     redis: RedisSettings
-    gemini: GeminiSettings = GeminiSettings()
+    openai: OpenAISettings = OpenAISettings()
     model_config = SettingsConfigDict(env_nested_delimiter='__')
 
 
