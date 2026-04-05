@@ -32,7 +32,7 @@ ALLOWED_EFFORTS = {
 
 
 @ai_router.message(
-    filters.command('Р°С–', prefixes='.')
+    filters.command('.аі', prefixes='.')
     | filters.command('ai', prefixes='.')
 )
 async def ai_ask(
