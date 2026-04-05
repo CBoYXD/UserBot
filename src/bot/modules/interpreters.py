@@ -69,7 +69,7 @@ async def exec_python_code(msg: Message):
             res = await meval(
                 code,
                 globs=globals(),
-                **locals(),
+                msg=msg,
                 intrp_router=intrp_router,
             )
         finally:
