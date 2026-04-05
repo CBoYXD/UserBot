@@ -9,7 +9,7 @@ authors = [{name = "CBoYXD", email = "python.rust.cpp@gmail.com"}]
 dependencies = [
     "redis[hiredis]==5.0.2",
     "environs==10.3.0",
-    "pyrogram==2.0.106",
+    "kurigram>=2.2.19",
     "betterlogging==1.0.0",
     "tgcrypto==1.2.5",
     "pydantic==2.6.3",

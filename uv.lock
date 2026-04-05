@@ -205,6 +205,19 @@ wheels = [
 ]
 
 [[package]]
+name = "kurigram"
+version = "2.2.19"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pyaes" },
+    { name = "pysocks" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/aa/3c/0c5469b66ea5ad887d7b877b08113726e6d67ef622442c8dd7adbcf9e352/kurigram-2.2.19.tar.gz", hash = "sha256:6d86a870834527e91c6308f8307796a985a437a39e8112e3bc7a649c6d1f7daa", size = 557685, upload-time = "2026-02-20T09:36:08.844Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/8a/00/7b4354395f7adcbf862af968a989f45f690542c4f0b458dc4cc7c10d2a40/kurigram-2.2.19-py3-none-any.whl", hash = "sha256:fa255cfc1aaa4b9be9ed3120af612a460a3e1c78d872b6090717ea77ca31dbf8", size = 5494166, upload-time = "2026-02-20T09:36:07.095Z" },
+]
+
+[[package]]
 name = "marshmallow"
 version = "4.3.0"
 source = { registry = "https://pypi.org/simple" }
@@ -367,19 +380,6 @@ wheels = [
 ]
 
 [[package]]
-name = "pyrogram"
-version = "2.0.106"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "pyaes" },
-    { name = "pysocks" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/c8/8e/5d09eca17271320bb9a95e50b7e053770aee85b3fd338e8267e7b6b280ae/Pyrogram-2.0.106.tar.gz", hash = "sha256:30202995758fcb6e0f91224704ab7fedefea454297724bd70a6a71a23748c16f", size = 345997, upload-time = "2023-04-30T18:24:45.506Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/37/88/502ec24914d208e06baa6f27ff812f46815bb4f302018ad848ebf518abdf/Pyrogram-2.0.106-py3-none-any.whl", hash = "sha256:32b62b3d93030b1080cbe45b88c0e8790cf4e2179cf3321ede810d48edf97bc7", size = 3573685, upload-time = "2023-04-30T18:24:41.986Z" },
-]
-
-[[package]]
 name = "pysocks"
 version = "1.7.1"
 source = { registry = "https://pypi.org/simple" }
@@ -457,11 +457,11 @@ dependencies = [
     { name = "betterlogging" },
     { name = "environs" },
     { name = "httpx" },
+    { name = "kurigram" },
     { name = "meval" },
     { name = "piston-rspy" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
-    { name = "pyrogram" },
     { name = "redis", extra = ["hiredis"] },
     { name = "tgcrypto" },
 ]
@@ -471,11 +471,11 @@ requires-dist = [
     { name = "betterlogging", specifier = "==1.0.0" },
     { name = "environs", specifier = "==10.3.0" },
     { name = "httpx", specifier = ">=0.27.0" },
+    { name = "kurigram", specifier = ">=2.2.19" },
     { name = "meval", specifier = "==2.5" },
     { name = "piston-rspy", specifier = "==0.4.3" },
     { name = "pydantic", specifier = "==2.6.3" },
     { name = "pydantic-settings", specifier = "==2.2.1" },
-    { name = "pyrogram", specifier = "==2.0.106" },
     { name = "redis", extras = ["hiredis"], specifier = "==5.0.2" },
     { name = "tgcrypto", specifier = "==1.2.5" },
 ]

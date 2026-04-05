@@ -1,5 +1,9 @@
 # Steps, to run UserBot at localhost
 
+This project uses `kurigram` as the Telegram client library.
+Kurigram exposes the `pyrogram` import namespace, so source imports stay
+as `from pyrogram ...`.
+
 ### 1. Clone this repository
 
 ```bash
