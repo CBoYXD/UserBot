@@ -5,6 +5,7 @@ from pyrogram.enums import ParseMode
 from pyrogram.types import Message
 from redis.asyncio import Redis
 
+from src.bot.tools import utils
 from src.bot.tools.router import Router
 from src.services.codex import CodexClient
 
@@ -62,11 +63,17 @@ async def ai_ask(
             model=model,
             reasoning_effort=effort,
         )
-        text = (
-            f'<b>Q:</b> {escape(prompt)}\n\n'
-            f'<b>AI:</b>\n{escape(response)}'
+        text, file_text = _build_ai_response(
+            prompt_title='Q',
+            prompt=prompt,
+            response=response,
         )
-        await msg.edit(text, parse_mode=ParseMode.HTML)
+        await utils.edit_or_send_as_text_file(
+            msg,
+            text,
+            file_text=file_text,
+            filename=f'ai-response-{msg.id}.txt',
+        )
     except Exception as e:
         await msg.edit(
             f'<b>AI Error:</b> <code>{escape(str(e))}</code>',
@@ -115,11 +122,17 @@ async def ai_chat(
             reasoning_effort=effort,
         )
         history.append({'role': 'assistant', 'text': response})
-        text = (
-            f'<b>You:</b> {escape(prompt)}\n\n'
-            f'<b>AI:</b>\n{escape(response)}'
+        text, file_text = _build_ai_response(
+            prompt_title='You',
+            prompt=prompt,
+            response=response,
         )
-        await msg.edit(text, parse_mode=ParseMode.HTML)
+        await utils.edit_or_send_as_text_file(
+            msg,
+            text,
+            file_text=file_text,
+            filename=f'chat-response-{msg.id}.txt',
+        )
     except Exception as e:
         history.pop()
         await msg.edit(
@@ -368,6 +381,23 @@ def _extract_prompt(msg: Message) -> str:
     if msg.reply_to_message and msg.reply_to_message.text:
         prompt += '\n\n' + msg.reply_to_message.text
     return prompt
+
+
+def _build_ai_response(
+    *,
+    prompt_title: str,
+    prompt: str,
+    response: str,
+) -> tuple[str, str]:
+    html_text = (
+        f'<b>{escape(prompt_title)}:</b> {escape(prompt)}\n\n'
+        f'<b>AI:</b>\n{escape(response)}'
+    )
+    plain_text = (
+        f'{prompt_title}:\n{prompt}\n\n'
+        f'AI:\n{response}'
+    )
+    return html_text, plain_text
 
 
 async def _get_ai_preferences(

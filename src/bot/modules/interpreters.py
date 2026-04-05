@@ -45,9 +45,19 @@ async def exec_code(
             utils.get_output_msg(result.output),
             utils.get_process_time_msg(start, end),
         )
-        await msg.edit(
+        ready_text = utils.get_ready_text(
+            utils.get_input_text(
+                parse_code.language,
+                parse_code.code,
+            ),
+            utils.get_output_text(result.output),
+            utils.get_process_time_text(start, end),
+        )
+        await utils.edit_or_send_as_text_file(
+            msg,
             ready_msg,
-            parse_mode=ParseMode.HTML,
+            file_text=ready_text,
+            filename=f'run-output-{msg.id}.txt',
         )
     except Exception as e:
         await msg.edit(
@@ -84,9 +94,17 @@ async def exec_python_code(msg: Message):
             utils.get_from_terminal_msg(terminal_output),
             utils.get_process_time_msg(start, end),
         )
-        await msg.edit(
+        ready_text = utils.get_ready_text(
+            utils.get_input_text('python', code),
+            utils.get_output_text(res),
+            utils.get_from_terminal_text(terminal_output),
+            utils.get_process_time_text(start, end),
+        )
+        await utils.edit_or_send_as_text_file(
+            msg,
             ready_msg,
-            parse_mode=ParseMode.HTML,
+            file_text=ready_text,
+            filename=f'python-output-{msg.id}.txt',
         )
     except Exception as e:
         await msg.edit(
@@ -354,9 +372,20 @@ async def _handle_code_run(
         utils.get_output_msg(result.output),
         utils.get_process_time_msg(start, end),
     )
-    await msg.edit(
+    ready_text = utils.get_ready_text(
+        f'Snippet: {name}',
+        utils.get_input_text(
+            parse_code.language,
+            parse_code.code,
+        ),
+        utils.get_output_text(result.output),
+        utils.get_process_time_text(start, end),
+    )
+    await utils.edit_or_send_as_text_file(
+        msg,
         ready_msg,
-        parse_mode=ParseMode.HTML,
+        file_text=ready_text,
+        filename=f'code-run-{name}-{msg.id}.txt',
     )
 
 
@@ -367,15 +396,25 @@ async def _handle_code_show(
 ) -> None:
     name = _extract_snippet_name_from_text(remainder)
     parse_code = await _load_snippet(redis, name)
-    await msg.edit(
-        utils.get_ready_msg(
-            f'<b>Snippet:</b> <code>{name}</code>',
-            utils.get_input_msg(
-                parse_code.language,
-                parse_code.code,
-            ),
+    ready_msg = utils.get_ready_msg(
+        f'<b>Snippet:</b> <code>{name}</code>',
+        utils.get_input_msg(
+            parse_code.language,
+            parse_code.code,
         ),
-        parse_mode=ParseMode.HTML,
+    )
+    ready_text = utils.get_ready_text(
+        f'Snippet: {name}',
+        utils.get_input_text(
+            parse_code.language,
+            parse_code.code,
+        ),
+    )
+    await utils.edit_or_send_as_text_file(
+        msg,
+        ready_msg,
+        file_text=ready_text,
+        filename=f'code-show-{name}-{msg.id}.txt',
     )
 
 
@@ -403,9 +442,19 @@ async def _handle_code_list(
         f'<code>{name}</code> <i>({language})</i>'
         for name, language in snippets
     ]
-    await msg.edit(
-        '<b>Saved code</b>\n' + '\n'.join(lines),
-        parse_mode=ParseMode.HTML,
+    ready_msg = '<b>Saved code</b>\n' + '\n'.join(lines)
+    ready_text = utils.get_ready_text(
+        'Saved code',
+        '\n'.join(
+            f'{name} ({language})'
+            for name, language in snippets
+        ),
+    )
+    await utils.edit_or_send_as_text_file(
+        msg,
+        ready_msg,
+        file_text=ready_text,
+        filename=f'code-list-{msg.id}.txt',
     )
 
 
