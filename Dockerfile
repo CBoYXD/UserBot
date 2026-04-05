@@ -16,6 +16,7 @@ COPY pyproject.toml uv.lock README.md /usr/src/userbot/
 RUN uv sync --frozen --no-dev
 
 COPY bot.py /usr/src/userbot/
+COPY manage.py /usr/src/userbot/
 COPY src /usr/src/userbot/src
 
-CMD ["uv", "run", "python", "bot.py"]
+CMD ["uv", "run", "python", "manage.py", "run"]

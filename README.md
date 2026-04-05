@@ -15,10 +15,21 @@ git clone https://github.com/CBoYXD/UserBot.git
 1) [Install Docker](https://docs.docker.com/engine/install/) (if not already installed)
 2) Start Docker
 3) Create `.env` from `example.env`
-4) Run project
+4) Start Redis
+5) Create Telegram session
+6) Run the bot
 
 ```bash
-docker compose up
+uv sync
+uv run python manage.py redis-up
+uv run python manage.py session-init
+uv run python manage.py run
+```
+
+For the full Docker stack:
+
+```bash
+uv run python manage.py up
 ```
 
 ### 3. Connect Codex OAuth
