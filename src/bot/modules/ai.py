@@ -31,10 +31,7 @@ ALLOWED_EFFORTS = {
 }
 
 
-@ai_router.message(
-    filters.command('.аі', prefixes='.')
-    | filters.command('.ші', prefixes='.')
-)
+@ai_router.message(filters.command('ai', prefixes='.'))
 async def ai_ask(
     msg: Message,
     codex: CodexClient,
@@ -77,10 +74,7 @@ async def ai_ask(
         )
 
 
-@ai_router.message(
-    filters.command('С‡Р°С‚', prefixes='.')
-    | filters.command('chat', prefixes='.')
-)
+@ai_router.message(filters.command('chat', prefixes='.'))
 async def ai_chat(
     msg: Message,
     codex: CodexClient,
@@ -134,10 +128,7 @@ async def ai_chat(
         )
 
 
-@ai_router.message(
-    filters.command('С‡Р°С‚РєР»С–СЂ', prefixes='.')
-    | filters.command('chatclear', prefixes='.')
-)
+@ai_router.message(filters.command('chatclear', prefixes='.'))
 async def ai_chat_clear(msg: Message):
     """Clear chat history for current chat."""
     chat_id = msg.chat.id
@@ -148,10 +139,7 @@ async def ai_chat_clear(msg: Message):
     )
 
 
-@ai_router.message(
-    filters.command('Р°С–РјРѕРґРµР»СЊ', prefixes='.')
-    | filters.command('aimodel', prefixes='.')
-)
+@ai_router.message(filters.command('aimodel', prefixes='.'))
 async def ai_model_info(
     msg: Message,
     codex: CodexClient,
