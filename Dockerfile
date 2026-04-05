@@ -19,4 +19,4 @@ COPY bot.py /usr/src/userbot/
 COPY manage.py /usr/src/userbot/
 COPY src /usr/src/userbot/src
 
-CMD ["uv", "run", "python", "manage.py", "run"]
+CMD ["uv", "run", "userbot", "run"]

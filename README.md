@@ -21,18 +21,18 @@ git clone https://github.com/CBoYXD/UserBot.git
 
 ```bash
 uv sync
-uv run python manage.py redis-up
-uv run python manage.py session-init
-uv run python manage.py run
+docker compose up -d redis_db
+uv run userbot session-init
+uv run userbot run
 ```
 
 Local CLI expects Redis on `127.0.0.1:${REDIS__PORT}`.
-`manage.py redis-up` publishes that port from Docker automatically.
+`docker compose up -d redis_db` publishes that port from Docker.
 
 For the full Docker stack:
 
 ```bash
-uv run python manage.py up
+docker compose up --build
 ```
 
 ### 3. Connect Codex OAuth
