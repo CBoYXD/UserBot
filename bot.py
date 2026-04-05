@@ -1,4 +1,6 @@
 import logging
+from pathlib import Path
+
 import betterlogging as bl
 from pyrogram import Client
 from pyrogram.enums import ParseMode
@@ -15,6 +17,11 @@ from src.services.codex import CodexClient
 from src.bot.modules import routers
 
 
+ROOT_DIR = Path(__file__).resolve().parent
+SESSION_NAME = 'userbot'
+SESSION_FILE = ROOT_DIR / f'{SESSION_NAME}.session'
+
+
 def setup_logging() -> None:
     log_level = logging.INFO
     bl.basic_colorized_config(level=log_level)
@@ -29,10 +36,11 @@ def setup_logging() -> None:
 
 def create_client(config: Config) -> Client:
     return Client(
-        name='userbot',
+        name=SESSION_NAME,
         api_id=config.userbot.api_id,
         api_hash=config.userbot.api_hash,
         parse_mode=ParseMode.MARKDOWN,
+        workdir=ROOT_DIR,
     )
 
 
@@ -55,6 +63,7 @@ def build_dispatcher(config: Config) -> Dispatcher:
 
 def run_bot() -> None:
     setup_logging()
+    ensure_session_exists()
     config = get_config()
     dispatcher = build_dispatcher(config)
     dispatcher.run()
@@ -65,6 +74,16 @@ def init_session() -> User:
     config = get_config()
     with create_client(config) as client:
         return client.get_me()
+
+
+def ensure_session_exists() -> None:
+    if SESSION_FILE.exists():
+        return
+    raise RuntimeError(
+        'Telegram session file was not found. '
+        'Run `uv run userbot session-init` on the host first. '
+        f'Expected file: {SESSION_FILE}'
+    )
 
 
 def main() -> None:

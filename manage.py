@@ -12,7 +12,8 @@ def command_session_init(_args: argparse.Namespace) -> None:
     print(
         'Telegram session is ready.\n'
         f'Account: {name} ({username})\n'
-        'Session file: userbot.session'
+        'Session file: userbot.session\n'
+        'You can now start the bot locally or with docker compose.'
     )
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(

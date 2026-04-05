@@ -28,6 +28,8 @@ uv run userbot run
 
 Local CLI expects Redis on `127.0.0.1:${REDIS__PORT}`.
 `docker compose up -d redis_db` publishes that port from Docker.
+`session-init` must be done on the host before `docker compose up --build`,
+so `userbot.session` exists in the project root.
 
 For the full Docker stack:
 
