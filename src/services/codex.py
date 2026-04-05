@@ -3,12 +3,11 @@ import hashlib
 import json
 import secrets
 import time
-
-from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlencode, urlparse
 
 import httpx
+from redis.asyncio import Redis
 
 
 AUTHORIZE_URL = 'https://auth.openai.com/oauth/authorize'
@@ -21,6 +20,7 @@ JWT_CLAIM_PATH = 'https://api.openai.com/auth'
 TOKEN_REFRESH_WINDOW = 60
 DEFAULT_MODEL = 'gpt-5.4'
 DEFAULT_REASONING_EFFORT = 'medium'
+DEFAULT_AUTH_KEY = 'auth:codex'
 
 
 def _b64url_encode(value: bytes) -> str:
@@ -81,63 +81,75 @@ def _extract_response_text(response: dict[str, Any]) -> str:
 
 
 class CodexAuthStore:
-    def __init__(self, file_path: str):
-        self._path = Path(file_path)
+    def __init__(
+        self,
+        redis: Redis,
+        key: str = DEFAULT_AUTH_KEY,
+    ):
+        self._redis = redis
+        self._key = key
 
     @property
-    def path(self) -> str:
-        return str(self._path)
+    def key(self) -> str:
+        return self._key
 
-    def _load(self) -> dict[str, Any]:
-        if not self._path.exists():
-            return {}
-        with self._path.open('r', encoding='utf-8') as fp:
-            return json.load(fp)
+    async def get_pending(self) -> dict[str, Any] | None:
+        return await self._get_json_field('pending')
 
-    def _save(self, data: dict[str, Any]) -> None:
-        self._path.parent.mkdir(parents=True, exist_ok=True)
-        with self._path.open('w', encoding='utf-8') as fp:
-            json.dump(data, fp, ensure_ascii=False, indent=2)
+    async def set_pending(self, pending: dict[str, Any]) -> None:
+        await self._set_json_field('pending', pending)
 
-    def get_pending(self) -> dict[str, Any] | None:
-        data = self._load()
-        pending = data.get('pending')
-        return pending if isinstance(pending, dict) else None
+    async def get_credentials(self) -> dict[str, Any] | None:
+        return await self._get_json_field('credentials')
 
-    def set_pending(self, pending: dict[str, Any]) -> None:
-        data = self._load()
-        data['pending'] = pending
-        self._save(data)
-
-    def get_credentials(self) -> dict[str, Any] | None:
-        data = self._load()
-        credentials = data.get('credentials')
-        return (
-            credentials
-            if isinstance(credentials, dict)
-            else None
+    async def set_credentials(self, credentials: dict[str, Any]) -> None:
+        await self._redis.hset(
+            self._key,
+            mapping={
+                'credentials': json.dumps(
+                    credentials,
+                    ensure_ascii=False,
+                )
+            },
         )
+        await self._redis.hdel(self._key, 'pending')
 
-    def set_credentials(self, credentials: dict[str, Any]) -> None:
-        data = self._load()
-        data['credentials'] = credentials
-        data.pop('pending', None)
-        self._save(data)
+    async def clear_all(self) -> None:
+        await self._redis.delete(self._key)
 
-    def clear_all(self) -> None:
-        self._save({})
+    async def _get_json_field(
+        self,
+        field: str,
+    ) -> dict[str, Any] | None:
+        raw = await self._redis.hget(self._key, field)
+        if raw is None:
+            return None
+        value = json.loads(raw.decode('utf-8'))
+        return value if isinstance(value, dict) else None
+
+    async def _set_json_field(
+        self,
+        field: str,
+        value: dict[str, Any],
+    ) -> None:
+        await self._redis.hset(
+            self._key,
+            field,
+            json.dumps(value, ensure_ascii=False),
+        )
 
 
 class CodexClient:
     def __init__(
         self,
+        redis: Redis,
         model: str = DEFAULT_MODEL,
         reasoning_effort: str = DEFAULT_REASONING_EFFORT,
-        credentials_path: str = '.config/codex-oauth.json',
+        auth_key: str = DEFAULT_AUTH_KEY,
     ):
         self._model = model
         self._reasoning_effort = reasoning_effort
-        self._store = CodexAuthStore(credentials_path)
+        self._store = CodexAuthStore(redis, auth_key)
         self._http = httpx.AsyncClient(
             timeout=httpx.Timeout(90.0, connect=15.0),
         )
@@ -150,10 +162,10 @@ class CodexClient:
     def reasoning_effort(self) -> str:
         return self._reasoning_effort
 
-    def begin_oauth(self) -> str:
+    async def begin_oauth(self) -> str:
         verifier, challenge = _build_pkce_pair()
         state = secrets.token_hex(16)
-        self._store.set_pending(
+        await self._store.set_pending(
             {
                 'verifier': verifier,
                 'state': state,
@@ -174,8 +186,11 @@ class CodexClient:
         }
         return f'{AUTHORIZE_URL}?{urlencode(params)}'
 
-    async def complete_oauth(self, authorization_input: str) -> dict[str, Any]:
-        pending = self._store.get_pending()
+    async def complete_oauth(
+        self,
+        authorization_input: str,
+    ) -> dict[str, Any]:
+        pending = await self._store.get_pending()
         if not pending:
             raise RuntimeError(
                 'No active OAuth flow. Run .codexlogin first.'
@@ -196,15 +211,15 @@ class CodexClient:
             code=code,
             verifier=str(pending['verifier']),
         )
-        self._store.set_credentials(credentials)
+        await self._store.set_credentials(credentials)
         return credentials
 
-    def logout(self) -> None:
-        self._store.clear_all()
+    async def logout(self) -> None:
+        await self._store.clear_all()
 
-    def get_auth_status(self) -> dict[str, Any]:
-        credentials = self._store.get_credentials()
-        pending = self._store.get_pending()
+    async def get_auth_status(self) -> dict[str, Any]:
+        credentials = await self._store.get_credentials()
+        pending = await self._store.get_pending()
         return {
             'authenticated': credentials is not None,
             'pending': pending is not None,
@@ -214,7 +229,7 @@ class CodexClient:
             'account_id': credentials.get('account_id')
             if credentials
             else None,
-            'credentials_path': self._store.path,
+            'store_key': self._store.key,
         }
 
     async def generate(
@@ -265,7 +280,7 @@ class CodexClient:
             refreshed = await self._refresh_credentials(
                 credentials['refresh']
             )
-            self._store.set_credentials(refreshed)
+            await self._store.set_credentials(refreshed)
             return await self._stream_response(
                 credentials=refreshed,
                 body=body,
@@ -379,9 +394,9 @@ class CodexClient:
         }
 
     async def _ensure_valid_credentials(self) -> dict[str, Any]:
-        credentials = self._store.get_credentials()
+        credentials = await self._store.get_credentials()
         if not credentials:
-            pending = self._store.get_pending()
+            pending = await self._store.get_pending()
             if pending:
                 raise RuntimeError(
                     'Codex OAuth is pending. Finish it with '
@@ -401,7 +416,7 @@ class CodexClient:
         refreshed = await self._refresh_credentials(
             str(credentials['refresh'])
         )
-        self._store.set_credentials(refreshed)
+        await self._store.set_credentials(refreshed)
         return refreshed
 
     def _build_body(

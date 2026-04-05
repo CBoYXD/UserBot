@@ -43,6 +43,7 @@ docker compose up --build
 2) Open the URL and sign in with ChatGPT/Codex
 3) Copy the full redirect URL from the browser
 4) Send `.codexauth <redirect_url>`
+5) OAuth state is stored in Redis under `auth:codex`
 
 ### 4. Configure AI settings in Telegram
 
@@ -52,6 +53,7 @@ docker compose up --build
 4) Reset both values to built-in defaults with `.codexreset`
 
 Model and effort are stored in Redis, not in `.env`.
+Runtime settings are stored in Redis under `settings:runtime`.
 
 ### 5. Run code in Telegram
 

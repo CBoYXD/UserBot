@@ -265,7 +265,7 @@ async def codex_reset(
 @ai_router.message(filters.command('codexlogin', prefixes='.'))
 async def codex_login(msg: Message, codex: CodexClient):
     """Start Codex OAuth flow."""
-    url = codex.begin_oauth()
+    url = await codex.begin_oauth()
     await msg.edit(
         '<b>Codex OAuth</b>\n\n'
         '1. Open the URL below in your browser.\n'
@@ -327,7 +327,7 @@ async def codex_status(
     redis: Redis,
 ):
     """Show Codex auth status."""
-    status = codex.get_auth_status()
+    status = await codex.get_auth_status()
     model, effort, model_source, effort_source = (
         await _get_ai_preferences(redis, codex)
     )
@@ -340,7 +340,7 @@ async def codex_status(
             f'({escape(model_source)})\n'
             f'<b>Effort:</b> <code>{escape(effort)}</code> '
             f'({escape(effort_source)})\n'
-            f'<b>Store:</b> <code>{escape(status["credentials_path"])}</code>',
+            f'<b>Store:</b> <code>{escape(status["store_key"])}</code>',
             parse_mode=ParseMode.HTML,
         )
         return
@@ -353,7 +353,7 @@ async def codex_status(
         f'({escape(effort_source)})\n'
         f'<b>Account:</b> <code>{escape(str(status["account_id"]))}</code>\n'
         f'<b>Expires:</b> <code>{escape(str(status["expires"]))}</code>\n'
-        f'<b>Store:</b> <code>{escape(status["credentials_path"])}</code>',
+        f'<b>Store:</b> <code>{escape(status["store_key"])}</code>',
         parse_mode=ParseMode.HTML,
     )
 
@@ -361,7 +361,7 @@ async def codex_status(
 @ai_router.message(filters.command('codexlogout', prefixes='.'))
 async def codex_logout(msg: Message, codex: CodexClient):
     """Clear Codex auth state."""
-    codex.logout()
+    await codex.logout()
     await msg.edit(
         '<b>Codex OAuth:</b> cleared.',
         parse_mode=ParseMode.HTML,

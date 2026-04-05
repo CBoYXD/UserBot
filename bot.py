@@ -46,11 +46,9 @@ def create_client(config: Config) -> Client:
 
 def build_dispatcher(config: Config) -> Dispatcher:
     redis = get_redis_engine(config.redis)
-    runtime_settings = RuntimeSettings('.config/settings.json')
+    runtime_settings = RuntimeSettings(redis)
     runtime_settings.load()
-    codex = CodexClient(
-        credentials_path=config.codex.credentials_path,
-    )
+    codex = CodexClient(redis=redis)
     return Dispatcher(
         client=create_client(config),
         runtime_settings=runtime_settings,

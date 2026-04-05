@@ -1,10 +1,11 @@
+import asyncio
+import json
+from functools import lru_cache
+from logging import getLogger
+
 from pydantic import BaseModel
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from functools import lru_cache
-from os import path
-from logging import getLogger
 from redis.asyncio import Redis
-import json
 
 
 class UserBotSettings(BaseModel):
@@ -20,14 +21,9 @@ class RedisSettings(BaseModel):
     password: str
 
 
-class CodexSettings(BaseModel):
-    credentials_path: str = '.config/codex-oauth.json'
-
-
 class Config(BaseSettings):
     userbot: UserBotSettings
     redis: RedisSettings
-    codex: CodexSettings = CodexSettings()
     model_config = SettingsConfigDict(
         env_file='.env',
         env_file_encoding='utf-8',
@@ -55,15 +51,15 @@ def get_redis_engine(
 
 
 class RuntimeSettings:
-    def __init__(self, file_path: str = 'settings.json'):
-        self.path = file_path
+    def __init__(
+        self,
+        redis: Redis,
+        key: str = 'settings:runtime',
+    ):
+        self.redis = redis
+        self.key = key
         self.logger = getLogger('RuntimeSettings')
         self.data = {}
-        self.modified = (
-            path.getmtime(file_path)
-            if path.exists(file_path)
-            else 0
-        )
 
     def get(self, key, default=None):
         return self.data.get(key, default)
@@ -72,11 +68,20 @@ class RuntimeSettings:
         self.data.update(m, **kwargs)
 
     def load(self):
-        if not path.exists(self.path):
+        raw = asyncio.run(self.redis.get(self.key))
+        if raw is None:
+            self.data = {}
             return
-        with open(self.path, 'r', encoding='utf-8') as fp:
-            self.data = json.load(fp)
+        self.data = json.loads(raw.decode('utf-8'))
 
     def save(self):
-        with open(self.path, 'w', encoding='utf-8') as fp:
-            json.dump(self.data, fp, ensure_ascii=False, indent=3)
+        asyncio.run(
+            self.redis.set(
+                self.key,
+                json.dumps(
+                    self.data,
+                    ensure_ascii=False,
+                    indent=3,
+                ),
+            )
+        )
