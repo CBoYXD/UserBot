@@ -3,6 +3,7 @@ from html import escape
 from pyrogram import filters
 from pyrogram.enums import ParseMode
 from pyrogram.types import Message
+from redis.asyncio import Redis
 
 from ..tools.router import Router
 from ...services.codex import CodexClient
@@ -19,13 +20,26 @@ SYSTEM_PROMPT = (
 
 _chat_histories: dict[int, list[dict[str, str]]] = {}
 MAX_HISTORY = 20
+AI_MODEL_KEY = 'settings:ai:model'
+AI_EFFORT_KEY = 'settings:ai:effort'
+ALLOWED_EFFORTS = {
+    'minimal',
+    'low',
+    'medium',
+    'high',
+    'xhigh',
+}
 
 
 @ai_router.message(
     filters.command('Р°С–', prefixes='.')
     | filters.command('ai', prefixes='.')
 )
-async def ai_ask(msg: Message, codex: CodexClient):
+async def ai_ask(
+    msg: Message,
+    codex: CodexClient,
+    redis: Redis,
+):
     """Single question to Codex."""
     prompt = _extract_prompt(msg)
     if not prompt:
@@ -41,10 +55,15 @@ async def ai_ask(msg: Message, codex: CodexClient):
     )
 
     try:
+        model, effort, _, _ = await _get_ai_preferences(
+            redis, codex
+        )
         response = await codex.generate(
             prompt=prompt,
             system_instruction=SYSTEM_PROMPT,
             session_id=f'tg:{msg.chat.id}:ask',
+            model=model,
+            reasoning_effort=effort,
         )
         text = (
             f'<b>Q:</b> {escape(prompt)}\n\n'
@@ -62,7 +81,11 @@ async def ai_ask(msg: Message, codex: CodexClient):
     filters.command('С‡Р°С‚', prefixes='.')
     | filters.command('chat', prefixes='.')
 )
-async def ai_chat(msg: Message, codex: CodexClient):
+async def ai_chat(
+    msg: Message,
+    codex: CodexClient,
+    redis: Redis,
+):
     """Chat with context memory per chat."""
     prompt = _extract_prompt(msg)
     if not prompt:
@@ -87,10 +110,15 @@ async def ai_chat(msg: Message, codex: CodexClient):
     )
 
     try:
+        model, effort, _, _ = await _get_ai_preferences(
+            redis, codex
+        )
         response = await codex.chat(
             messages=history,
             system_instruction=SYSTEM_PROMPT,
             session_id=f'tg:{chat_id}:chat',
+            model=model,
+            reasoning_effort=effort,
         )
         history.append({'role': 'assistant', 'text': response})
         text = (
@@ -124,10 +152,112 @@ async def ai_chat_clear(msg: Message):
     filters.command('Р°С–РјРѕРґРµР»СЊ', prefixes='.')
     | filters.command('aimodel', prefixes='.')
 )
-async def ai_model_info(msg: Message, codex: CodexClient):
-    """Show current AI model."""
+async def ai_model_info(
+    msg: Message,
+    codex: CodexClient,
+    redis: Redis,
+):
+    """Show current AI model and effort."""
+    model, effort, model_source, effort_source = (
+        await _get_ai_preferences(redis, codex)
+    )
     await msg.edit(
-        f'<b>AI Model:</b> <code>{escape(codex.model)}</code>',
+        '<b>AI Settings</b>\n'
+        f'<b>Model:</b> <code>{escape(model)}</code> '
+        f'({escape(model_source)})\n'
+        f'<b>Effort:</b> <code>{escape(effort)}</code> '
+        f'({escape(effort_source)})',
+        parse_mode=ParseMode.HTML,
+    )
+
+
+@ai_router.message(filters.command('codexmodel', prefixes='.'))
+async def codex_model(
+    msg: Message,
+    codex: CodexClient,
+    redis: Redis,
+):
+    """Show or update the current Codex model."""
+    model = _extract_prompt(msg)
+    if not model:
+        current_model, _, model_source, _ = (
+            await _get_ai_preferences(redis, codex)
+        )
+        await msg.edit(
+            '<b>Codex model:</b> '
+            f'<code>{escape(current_model)}</code> '
+            f'({escape(model_source)})',
+            parse_mode=ParseMode.HTML,
+        )
+        return
+
+    model = model.strip()
+    await redis.set(AI_MODEL_KEY, model)
+    _, effort, _, _ = await _get_ai_preferences(redis, codex)
+    await msg.edit(
+        '<b>AI Settings Updated</b>\n'
+        f'<b>Model:</b> <code>{escape(model)}</code>\n'
+        f'<b>Effort:</b> <code>{escape(effort)}</code>',
+        parse_mode=ParseMode.HTML,
+    )
+
+
+@ai_router.message(filters.command('codexeffort', prefixes='.'))
+async def codex_effort(
+    msg: Message,
+    codex: CodexClient,
+    redis: Redis,
+):
+    """Show or update the current Codex reasoning effort."""
+    effort = _extract_prompt(msg).lower()
+    if not effort:
+        _, current_effort, _, effort_source = (
+            await _get_ai_preferences(redis, codex)
+        )
+        allowed = ', '.join(sorted(ALLOWED_EFFORTS))
+        await msg.edit(
+            '<b>Codex effort:</b> '
+            f'<code>{escape(current_effort)}</code> '
+            f'({escape(effort_source)})\n'
+            f'<b>Allowed:</b> <code>{escape(allowed)}</code>',
+            parse_mode=ParseMode.HTML,
+        )
+        return
+
+    if effort not in ALLOWED_EFFORTS:
+        allowed = ', '.join(sorted(ALLOWED_EFFORTS))
+        await msg.edit(
+            '<b>Invalid effort.</b>\n'
+            f'<b>Allowed:</b> <code>{escape(allowed)}</code>',
+            parse_mode=ParseMode.HTML,
+        )
+        return
+
+    await redis.set(AI_EFFORT_KEY, effort)
+    model, _, _, _ = await _get_ai_preferences(redis, codex)
+    await msg.edit(
+        '<b>AI Settings Updated</b>\n'
+        f'<b>Model:</b> <code>{escape(model)}</code>\n'
+        f'<b>Effort:</b> <code>{escape(effort)}</code>',
+        parse_mode=ParseMode.HTML,
+    )
+
+
+@ai_router.message(filters.command('codexreset', prefixes='.'))
+async def codex_reset(
+    msg: Message,
+    codex: CodexClient,
+    redis: Redis,
+):
+    """Reset Redis-backed AI settings to defaults."""
+    await redis.delete(AI_MODEL_KEY, AI_EFFORT_KEY)
+    model, effort, _, _ = await _get_ai_preferences(
+        redis, codex
+    )
+    await msg.edit(
+        '<b>AI Settings Reset</b>\n'
+        f'<b>Model:</b> <code>{escape(model)}</code>\n'
+        f'<b>Effort:</b> <code>{escape(effort)}</code>',
         parse_mode=ParseMode.HTML,
     )
 
@@ -228,3 +358,29 @@ def _extract_prompt(msg: Message) -> str:
     if msg.reply_to_message and msg.reply_to_message.text:
         prompt += '\n\n' + msg.reply_to_message.text
     return prompt
+
+
+async def _get_ai_preferences(
+    redis: Redis,
+    codex: CodexClient,
+) -> tuple[str, str, str, str]:
+    raw_model = await redis.get(AI_MODEL_KEY)
+    raw_effort = await redis.get(AI_EFFORT_KEY)
+
+    model = (
+        raw_model.decode('utf-8').strip()
+        if raw_model
+        else codex.model
+    )
+    effort = (
+        raw_effort.decode('utf-8').strip().lower()
+        if raw_effort
+        else codex.reasoning_effort
+    )
+
+    if effort not in ALLOWED_EFFORTS:
+        effort = codex.reasoning_effort
+
+    model_source = 'redis' if raw_model else 'default'
+    effort_source = 'redis' if raw_effort else 'default'
+    return model, effort, model_source, effort_source

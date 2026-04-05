@@ -144,6 +144,10 @@ class CodexClient:
     def model(self) -> str:
         return self._model
 
+    @property
+    def reasoning_effort(self) -> str:
+        return self._reasoning_effort
+
     def begin_oauth(self) -> str:
         verifier, challenge = _build_pkce_pair()
         state = secrets.token_hex(16)
@@ -216,11 +220,15 @@ class CodexClient:
         prompt: str,
         system_instruction: str | None = None,
         session_id: str | None = None,
+        model: str | None = None,
+        reasoning_effort: str | None = None,
     ) -> str:
         return await self.chat(
             messages=[{'role': 'user', 'text': prompt}],
             system_instruction=system_instruction,
             session_id=session_id,
+            model=model,
+            reasoning_effort=reasoning_effort,
         )
 
     async def chat(
@@ -228,12 +236,20 @@ class CodexClient:
         messages: list[dict[str, str]],
         system_instruction: str | None = None,
         session_id: str | None = None,
+        model: str | None = None,
+        reasoning_effort: str | None = None,
     ) -> str:
         credentials = await self._ensure_valid_credentials()
+        selected_model = model or self._model
+        selected_effort = (
+            reasoning_effort or self._reasoning_effort
+        )
         body = self._build_body(
             messages=messages,
             system_instruction=system_instruction,
             session_id=session_id,
+            model=selected_model,
+            reasoning_effort=selected_effort,
         )
         try:
             return await self._stream_response(
@@ -385,6 +401,8 @@ class CodexClient:
         messages: list[dict[str, str]],
         system_instruction: str | None,
         session_id: str | None,
+        model: str,
+        reasoning_effort: str,
     ) -> dict[str, Any]:
         input_messages: list[dict[str, Any]] = []
         for index, message in enumerate(messages):
@@ -421,7 +439,7 @@ class CodexClient:
             )
 
         body: dict[str, Any] = {
-            'model': self._model,
+            'model': model,
             'store': False,
             'stream': True,
             'input': input_messages,
@@ -434,17 +452,22 @@ class CodexClient:
             body['instructions'] = system_instruction
         if session_id:
             body['prompt_cache_key'] = session_id
-        if self._reasoning_effort:
+        if reasoning_effort:
             body['reasoning'] = {
-                'effort': self._clamp_reasoning_effort(),
+                'effort': self._clamp_reasoning_effort(
+                    reasoning_effort
+                ),
                 'summary': 'auto',
             }
         return body
 
-    def _clamp_reasoning_effort(self) -> str:
-        if self._reasoning_effort == 'minimal':
+    def _clamp_reasoning_effort(
+        self,
+        reasoning_effort: str,
+    ) -> str:
+        if reasoning_effort == 'minimal':
             return 'low'
-        return self._reasoning_effort
+        return reasoning_effort
 
     def _build_headers(
         self,
