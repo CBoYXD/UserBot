@@ -51,4 +51,16 @@ docker compose up --build
 
 Model and effort are stored in Redis, not in `.env`.
 
-### 5. Enjoy using the userbot
+### 5. Run code in Telegram
+
+1) Execute code in Piston with `.run <language> <code>`
+2) Multi-line also works as `.run <language>` on the first line and code below it
+3) Reply with code to `.run <language>` if you do not want to paste it inline
+4) Execute local Python with `.py <code>`, `.py` plus code on the next lines, or reply with `.py`
+5) Save snippets with `.code save <name> <language> <code>`
+6) Run snippets with `.code run <name>`
+7) Show snippet source with `.code show <name>`
+8) List snippets with `.code ls`
+9) Delete snippets with `.code rm <name>`
+
+### 6. Enjoy using the userbot

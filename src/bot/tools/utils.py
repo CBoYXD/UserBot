@@ -1,5 +1,4 @@
 from html import escape
-from pyrogram.types import Message
 
 
 def get_input_msg(language: str, code: str) -> str:
@@ -32,13 +31,6 @@ def get_from_terminal_msg(output: str) -> str:
             f'{escape(output)}</pre>'
         )
     return ''
-
-
-def get_msg_text_with_reply(
-    my_msg: str, msg: Message
-) -> str:
-    reply_text = msg.reply_to_message.text or ''
-    return my_msg + '\n' + reply_text
 
 
 def get_ready_msg(*args: str) -> str:
