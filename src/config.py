@@ -21,8 +21,6 @@ class RedisSettings(BaseModel):
 
 
 class CodexSettings(BaseModel):
-    model: str = 'gpt-5.4'
-    reasoning_effort: str = 'medium'
     credentials_path: str = '.config/codex-oauth.json'
 
 

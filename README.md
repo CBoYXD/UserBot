@@ -28,4 +28,13 @@ docker compose up
 3) Copy the full redirect URL from the browser
 4) Send `.codexauth <redirect_url>`
 
-### 4. Enjoy using the userbot
+### 4. Configure AI settings in Telegram
+
+1) Check current settings with `.aimodel`
+2) Set the model with `.codexmodel <model>`
+3) Set reasoning effort with `.codexeffort <minimal|low|medium|high|xhigh>`
+4) Reset both values to built-in defaults with `.codexreset`
+
+Model and effort are stored in Redis, not in `.env`.
+
+### 5. Enjoy using the userbot

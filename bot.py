@@ -38,8 +38,6 @@ def main() -> None:
         parse_mode=ParseMode.MARKDOWN,
     )
     codex = CodexClient(
-        model=config.codex.model,
-        reasoning_effort=config.codex.reasoning_effort,
         credentials_path=config.codex.credentials_path,
     )
     dp = Dispatcher(

@@ -279,7 +279,11 @@ async def codex_login(msg: Message, codex: CodexClient):
 
 
 @ai_router.message(filters.command('codexauth', prefixes='.'))
-async def codex_auth(msg: Message, codex: CodexClient):
+async def codex_auth(
+    msg: Message,
+    codex: CodexClient,
+    redis: Redis,
+):
     """Complete Codex OAuth flow."""
     authorization_input = _extract_prompt(msg)
     if not authorization_input:
@@ -298,9 +302,13 @@ async def codex_auth(msg: Message, codex: CodexClient):
         credentials = await codex.complete_oauth(
             authorization_input
         )
+        model, effort, _, _ = await _get_ai_preferences(
+            redis, codex
+        )
         await msg.edit(
             '<b>Codex OAuth:</b> connected.\n'
-            f'<b>Model:</b> <code>{escape(codex.model)}</code>\n'
+            f'<b>Model:</b> <code>{escape(model)}</code>\n'
+            f'<b>Effort:</b> <code>{escape(effort)}</code>\n'
             f'<b>Account:</b> <code>{escape(credentials["account_id"])}</code>\n'
             f'<b>Expires:</b> <code>{escape(str(credentials["expires"]))}</code>',
             parse_mode=ParseMode.HTML,
@@ -313,14 +321,25 @@ async def codex_auth(msg: Message, codex: CodexClient):
 
 
 @ai_router.message(filters.command('codexstatus', prefixes='.'))
-async def codex_status(msg: Message, codex: CodexClient):
+async def codex_status(
+    msg: Message,
+    codex: CodexClient,
+    redis: Redis,
+):
     """Show Codex auth status."""
     status = codex.get_auth_status()
+    model, effort, model_source, effort_source = (
+        await _get_ai_preferences(redis, codex)
+    )
     if not status['authenticated']:
         pending = 'yes' if status['pending'] else 'no'
         await msg.edit(
             '<b>Codex OAuth:</b> not connected.\n'
             f'<b>Pending flow:</b> <code>{pending}</code>\n'
+            f'<b>Model:</b> <code>{escape(model)}</code> '
+            f'({escape(model_source)})\n'
+            f'<b>Effort:</b> <code>{escape(effort)}</code> '
+            f'({escape(effort_source)})\n'
             f'<b>Store:</b> <code>{escape(status["credentials_path"])}</code>',
             parse_mode=ParseMode.HTML,
         )
@@ -328,7 +347,10 @@ async def codex_status(msg: Message, codex: CodexClient):
 
     await msg.edit(
         '<b>Codex OAuth:</b> connected.\n'
-        f'<b>Model:</b> <code>{escape(codex.model)}</code>\n'
+        f'<b>Model:</b> <code>{escape(model)}</code> '
+        f'({escape(model_source)})\n'
+        f'<b>Effort:</b> <code>{escape(effort)}</code> '
+        f'({escape(effort_source)})\n'
         f'<b>Account:</b> <code>{escape(str(status["account_id"]))}</code>\n'
         f'<b>Expires:</b> <code>{escape(str(status["expires"]))}</code>\n'
         f'<b>Store:</b> <code>{escape(status["credentials_path"])}</code>',

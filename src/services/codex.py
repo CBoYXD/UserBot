@@ -19,6 +19,8 @@ REDIRECT_URI = 'http://localhost:1455/auth/callback'
 SCOPE = 'openid profile email offline_access'
 JWT_CLAIM_PATH = 'https://api.openai.com/auth'
 TOKEN_REFRESH_WINDOW = 60
+DEFAULT_MODEL = 'gpt-5.4'
+DEFAULT_REASONING_EFFORT = 'medium'
 
 
 def _b64url_encode(value: bytes) -> str:
@@ -129,8 +131,8 @@ class CodexAuthStore:
 class CodexClient:
     def __init__(
         self,
-        model: str = 'gpt-5.4',
-        reasoning_effort: str = 'medium',
+        model: str = DEFAULT_MODEL,
+        reasoning_effort: str = DEFAULT_REASONING_EFFORT,
         credentials_path: str = '.config/codex-oauth.json',
     ):
         self._model = model
