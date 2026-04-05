@@ -381,6 +381,12 @@ class CodexClient:
     async def _ensure_valid_credentials(self) -> dict[str, Any]:
         credentials = self._store.get_credentials()
         if not credentials:
+            pending = self._store.get_pending()
+            if pending:
+                raise RuntimeError(
+                    'Codex OAuth is pending. Finish it with '
+                    '.codexauth <redirect_url>.'
+                )
             raise RuntimeError(
                 'Codex OAuth is not configured. Run .codexlogin first.'
             )
