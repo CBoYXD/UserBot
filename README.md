@@ -26,6 +26,9 @@ uv run python manage.py session-init
 uv run python manage.py run
 ```
 
+Local CLI expects Redis on `127.0.0.1:${REDIS__PORT}`.
+`manage.py redis-up` publishes that port from Docker automatically.
+
 For the full Docker stack:
 
 ```bash
