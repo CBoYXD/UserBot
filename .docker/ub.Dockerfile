@@ -1,16 +1,23 @@
 FROM python:3.10
 
 ENV PYTHONUNBUFFERED=1
+ENV UV_PROJECT_ENVIRONMENT=/opt/venv
+ENV UV_LINK_MODE=copy
+ENV PATH="/opt/venv/bin:$PATH"
 
 LABEL maintainer="https://github.com/CBoYXD" version="1.0.0"
 
 WORKDIR /usr/src/userbot
 
-RUN apt update && apt upgrade -y
+RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
 
-COPY . /usr/src/userbot
+RUN pip install --no-cache-dir --upgrade pip uv
 
-RUN pip install --upgrade pip uv && \
-    uv sync --no-dev
+COPY pyproject.toml uv.lock README.md /usr/src/userbot/
+
+RUN uv sync --frozen --no-dev
+
+COPY bot.py /usr/src/userbot/
+COPY src /usr/src/userbot/src
 
 CMD uv run python bot.py
