@@ -6,15 +6,8 @@ from pyrogram.enums import ChatType, ParseMode
 from pyrogram.types import Message
 from redis.asyncio import Redis
 
-from src.bot.tools.router import Router
-
-
-afk_router = Router('afk')
-
-AFK_ENABLED_KEY = 'afk:enabled'
-AFK_REASON_KEY = 'afk:reason'
-AFK_SINCE_KEY = 'afk:since'
-AFK_REPLY_TTL = 600
+from src.bot.modules.afk import storage
+from src.bot.modules.afk.router import afk_router
 
 
 def _humanize(seconds: int) -> str:
@@ -34,9 +27,7 @@ async def afk_on(msg: Message, redis: Redis):
     text = msg.text or ''
     parts = text.split(maxsplit=1)
     reason = parts[1].strip() if len(parts) > 1 else ''
-    await redis.set(AFK_ENABLED_KEY, '1')
-    await redis.set(AFK_REASON_KEY, reason)
-    await redis.set(AFK_SINCE_KEY, str(int(time.time())))
+    await storage.enable(redis, reason)
     msg_text = '<b>AFK:</b> on.'
     if reason:
         msg_text += f' <i>{escape(reason)}</i>'
@@ -47,19 +38,11 @@ async def afk_on(msg: Message, redis: Redis):
     filters.me & filters.command('unafk', prefixes='.')
 )
 async def afk_off(msg: Message, redis: Redis):
-    was = await redis.get(AFK_ENABLED_KEY)
-    await redis.delete(
-        AFK_ENABLED_KEY, AFK_REASON_KEY, AFK_SINCE_KEY
+    was = await storage.disable(redis)
+    text = '<b>AFK:</b> off.' if was else (
+        '<b>AFK:</b> already off.'
     )
-    if was:
-        await msg.edit(
-            '<b>AFK:</b> off.', parse_mode=ParseMode.HTML
-        )
-    else:
-        await msg.edit(
-            '<b>AFK:</b> already off.',
-            parse_mode=ParseMode.HTML,
-        )
+    await msg.edit(text, parse_mode=ParseMode.HTML)
 
 
 @afk_router.message(
@@ -69,29 +52,17 @@ async def afk_off(msg: Message, redis: Redis):
     & ~filters.service
 )
 async def afk_auto_reply(msg: Message, redis: Redis):
-    enabled = await redis.get(AFK_ENABLED_KEY)
-    if not enabled:
+    if not await storage.is_enabled(redis):
         return
     if msg.chat.type != ChatType.PRIVATE:
         return
-
     user_id = msg.from_user.id if msg.from_user else 0
     if not user_id:
         return
-    rate_key = f'afk:replied:{user_id}'
-    if await redis.get(rate_key):
+    if not await storage.mark_replied(redis, user_id):
         return
-    await redis.set(rate_key, '1', ex=AFK_REPLY_TTL)
 
-    raw_reason = await redis.get(AFK_REASON_KEY)
-    raw_since = await redis.get(AFK_SINCE_KEY)
-    reason = (
-        raw_reason.decode('utf-8') if raw_reason else ''
-    )
-    since = (
-        int(raw_since.decode('utf-8')) if raw_since else 0
-    )
-
+    reason, since = await storage.get_state(redis)
     text = '🚫 AFK'
     if since:
         text += f' for {_humanize(int(time.time()) - since)}'
@@ -99,7 +70,6 @@ async def afk_auto_reply(msg: Message, redis: Redis):
     if reason:
         text += f'\nReason: {reason}'
     text += '\n_(automated reply)_'
-
     try:
         await msg.reply_text(text)
     except Exception:
@@ -112,9 +82,6 @@ async def afk_auto_off(msg: Message, redis: Redis):
     text = msg.text or msg.caption or ''
     if text.startswith('.'):
         return
-    enabled = await redis.get(AFK_ENABLED_KEY)
-    if not enabled:
+    if not await storage.is_enabled(redis):
         return
-    await redis.delete(
-        AFK_ENABLED_KEY, AFK_REASON_KEY, AFK_SINCE_KEY
-    )
+    await storage.disable(redis)

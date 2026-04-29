@@ -1,6 +1,3 @@
-import json
-import re
-import time
 from html import escape
 
 from pyrogram import filters
@@ -8,28 +5,20 @@ from pyrogram.enums import ParseMode
 from pyrogram.types import Message
 from redis.asyncio import Redis
 
+from src.bot.modules.notes import storage
+from src.bot.modules.notes.router import notes_router
 from src.bot.tools import utils
-from src.bot.tools.router import Router
-
-
-notes_router = Router('notes')
-notes_router.router_filters = filters.me
-
-NOTES_KEY = 'notes:list'
-NOTES_NEXT_ID = 'notes:next_id'
-TAG_RE = re.compile(r'#([\w\-_]+)', re.UNICODE)
 
 
 def _extract_body(msg: Message) -> str:
     text = msg.text or ''
     parts = text.split(maxsplit=1)
-    if len(parts) < 2:
-        return ''
-    return parts[1].strip()
+    return parts[1].strip() if len(parts) > 1 else ''
 
 
-async def _next_id(redis: Redis) -> int:
-    return int(await redis.incr(NOTES_NEXT_ID))
+def _truncate(text: str, n: int = 80) -> str:
+    text = (text or '').replace('\n', ' ')
+    return text if len(text) <= n else text[: n - 3] + '...'
 
 
 @notes_router.message(filters.command('note', prefixes='.'))
@@ -65,17 +54,8 @@ async def note_cmd(msg: Message, redis: Redis):
         )
         return
 
-    nid = await _next_id(redis)
-    tags = sorted(set(TAG_RE.findall(text)))
-    payload = json.dumps(
-        {
-            'text': text,
-            'ts': int(time.time()),
-            'tags': tags,
-        },
-        ensure_ascii=False,
-    )
-    await redis.hset(NOTES_KEY, str(nid), payload)
+    nid = await storage.next_id(redis)
+    tags = await storage.save(redis, nid, text)
     tags_str = (
         ' ' + ' '.join(f'#{t}' for t in tags) if tags else ''
     )
@@ -88,30 +68,22 @@ async def note_cmd(msg: Message, redis: Redis):
 @notes_router.message(filters.command('notes', prefixes='.'))
 async def notes_list(msg: Message, redis: Redis):
     body = _extract_body(msg)
-    raw = await redis.hgetall(NOTES_KEY)
-    if not raw:
+    items = await storage.all_notes(redis)
+    if not items:
         await msg.edit(
             '<b>Notes:</b> empty.',
             parse_mode=ParseMode.HTML,
         )
         return
 
-    items: list[tuple[int, dict]] = []
-    for k, v in raw.items():
-        try:
-            items.append(
-                (int(k.decode('utf-8')), json.loads(v))
-            )
-        except Exception:
-            continue
-    items.sort(key=lambda x: x[0])
-
     if body:
         tag = body.lstrip('#').lower()
         items = [
             it
             for it in items
-            if tag in (t.lower() for t in it[1].get('tags', []))
+            if tag in (
+                t.lower() for t in it[1].get('tags', [])
+            )
         ]
         if not items:
             await msg.edit(
@@ -121,14 +93,11 @@ async def notes_list(msg: Message, redis: Redis):
             )
             return
 
-    lines = []
-    for nid, data in items:
-        text = (data.get('text') or '').replace('\n', ' ')
-        if len(text) > 80:
-            text = text[:77] + '...'
-        lines.append(
-            f'<code>#{nid}</code> {escape(text)}'
-        )
+    lines = [
+        f'<code>#{nid}</code> '
+        f'{escape(_truncate(data.get("text") or ""))}'
+        for nid, data in items
+    ]
     text = '<b>Notes</b>\n' + '\n'.join(lines)
     file_text = '\n'.join(
         f'#{nid} {(data.get("text") or "")}'
@@ -150,14 +119,13 @@ async def _note_show(msg: Message, redis: Redis, rest: str):
             parse_mode=ParseMode.HTML,
         )
         return
-    raw = await redis.hget(NOTES_KEY, nid)
-    if not raw:
+    data = await storage.get(redis, nid)
+    if data is None:
         await msg.edit(
             f'<b>Note</b> <code>#{escape(nid)}</code> not found.',
             parse_mode=ParseMode.HTML,
         )
         return
-    data = json.loads(raw)
     tags = data.get('tags') or []
     tag_line = (
         '<b>Tags:</b> '
@@ -187,8 +155,7 @@ async def _note_rm(msg: Message, redis: Redis, rest: str):
             parse_mode=ParseMode.HTML,
         )
         return
-    deleted = await redis.hdel(NOTES_KEY, nid)
-    if not deleted:
+    if not await storage.delete(redis, nid):
         await msg.edit(
             f'<b>Note</b> <code>#{escape(nid)}</code> not found.',
             parse_mode=ParseMode.HTML,
@@ -208,18 +175,12 @@ async def _note_find(msg: Message, redis: Redis, rest: str):
             parse_mode=ParseMode.HTML,
         )
         return
-    raw = await redis.hgetall(NOTES_KEY)
-    matches: list[tuple[int, str]] = []
-    for k, v in raw.items():
-        try:
-            data = json.loads(v)
-        except Exception:
-            continue
-        text = (data.get('text') or '').lower()
-        if query in text:
-            matches.append(
-                (int(k.decode('utf-8')), data.get('text') or '')
-            )
+    items = await storage.all_notes(redis)
+    matches = [
+        (nid, data.get('text') or '')
+        for nid, data in items
+        if query in (data.get('text') or '').lower()
+    ]
     if not matches:
         await msg.edit(
             f'<b>Notes:</b> no matches for '
@@ -227,13 +188,10 @@ async def _note_find(msg: Message, redis: Redis, rest: str):
             parse_mode=ParseMode.HTML,
         )
         return
-    matches.sort(key=lambda x: x[0])
-    lines = []
-    for nid, text in matches:
-        text = text.replace('\n', ' ')
-        if len(text) > 80:
-            text = text[:77] + '...'
-        lines.append(f'<code>#{nid}</code> {escape(text)}')
+    lines = [
+        f'<code>#{nid}</code> {escape(_truncate(text))}'
+        for nid, text in matches
+    ]
     body = (
         f'<b>Notes matching</b> <code>{escape(query)}</code>\n'
         + '\n'.join(lines)
