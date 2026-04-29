@@ -1,8 +1,9 @@
+import asyncio
 import logging
 from pathlib import Path
 
 import betterlogging as bl
-from pyrogram import Client
+from pyrogram import Client, idle
 from pyrogram.enums import ParseMode
 from pyrogram.types import User
 from src.config import (
@@ -15,6 +16,7 @@ from src.bot.tools.dispatcher import Dispatcher
 from src.services.code_pars.piston import PistonClient
 from src.services.codex import CodexClient
 from src.bot.modules import routers
+from src.bot.modules.reminders import start_reminder_loop
 
 
 ROOT_DIR = Path(__file__).resolve().parent
@@ -44,27 +46,40 @@ def create_client(config: Config) -> Client:
     )
 
 
-def build_dispatcher(config: Config) -> Dispatcher:
+def build_runtime(config: Config):
     redis = get_redis_engine(config.redis)
     runtime_settings = RuntimeSettings(redis)
     runtime_settings.load()
     codex = CodexClient(redis=redis)
-    return Dispatcher(
-        client=create_client(config),
+    client = create_client(config)
+    dispatcher = Dispatcher(
+        client=client,
         runtime_settings=runtime_settings,
         routers=routers,
         redis=redis,
         piston=PistonClient(),
         codex=codex,
     )
+    return client, redis, dispatcher
+
+
+async def _run_async(client: Client, redis, dispatcher: Dispatcher) -> None:
+    dispatcher.update_runtime_settings()
+    dispatcher.register_routers()
+    await client.start()
+    await start_reminder_loop(redis, client)
+    try:
+        await idle()
+    finally:
+        await client.stop()
 
 
 def run_bot() -> None:
     setup_logging()
     ensure_session_exists()
     config = get_config()
-    dispatcher = build_dispatcher(config)
-    dispatcher.run()
+    client, redis, dispatcher = build_runtime(config)
+    asyncio.run(_run_async(client, redis, dispatcher))
 
 
 def init_session() -> User:
