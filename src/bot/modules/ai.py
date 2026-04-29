@@ -1,6 +1,6 @@
 from html import escape
 
-from pyrogram import filters
+from pyrogram import Client, filters
 from pyrogram.enums import ParseMode
 from pyrogram.types import Message
 from redis.asyncio import Redis
@@ -261,6 +261,192 @@ async def codex_reset(
         f'<b>Effort:</b> <code>{escape(effort)}</code>',
         parse_mode=ParseMode.HTML,
     )
+
+
+TLDR_SYSTEM_PROMPT = (
+    'You summarize Telegram chats. Produce a concise TL;DR '
+    'in the same language the chat is mostly written in. '
+    'Group by topics/threads if applicable. Use plain text '
+    'with short bullet lines. Keep it under 12 lines.'
+)
+TRANSLATE_SYSTEM_PROMPT = (
+    'You are a translator. Translate the user message to '
+    'the requested target language. Output only the '
+    'translation, with no commentary or quotes. Preserve '
+    'tone and formatting.'
+)
+
+
+@ai_router.message(filters.command('tldr', prefixes='.'))
+async def ai_tldr(
+    msg: Message,
+    codex: CodexClient,
+    redis: Redis,
+    client: Client,
+):
+    """Summarize last N messages of the current chat."""
+    raw = (msg.text or '').split(maxsplit=1)
+    arg = raw[1].strip() if len(raw) > 1 else ''
+    try:
+        limit = int(arg) if arg else 50
+    except ValueError:
+        limit = 50
+    limit = max(5, min(limit, 300))
+
+    await msg.edit(
+        f'<b>TLDR:</b> <i>reading last {limit} messages…</i>',
+        parse_mode=ParseMode.HTML,
+    )
+
+    try:
+        history: list[str] = []
+        async for m in client.get_chat_history(
+            chat_id=msg.chat.id, limit=limit + 5
+        ):
+            if m.id == msg.id:
+                continue
+            text = m.text or m.caption or ''
+            text = text.strip()
+            if not text:
+                continue
+            if text.startswith('.'):
+                continue
+            sender = m.from_user
+            if sender is not None:
+                name = (
+                    (sender.first_name or '')
+                    + (
+                        ' ' + sender.last_name
+                        if sender.last_name
+                        else ''
+                    )
+                ).strip() or (sender.username or 'User')
+            else:
+                name = getattr(
+                    m.sender_chat, 'title', 'Channel'
+                )
+            history.append(f'{name}: {text}')
+            if len(history) >= limit:
+                break
+
+        if not history:
+            await msg.edit(
+                '<b>TLDR:</b> no text messages to summarize.',
+                parse_mode=ParseMode.HTML,
+            )
+            return
+
+        history.reverse()
+        transcript = '\n'.join(history)
+
+        model, effort, _, _ = await _get_ai_preferences(
+            redis, codex
+        )
+        response = await codex.generate(
+            prompt=(
+                'Summarize this Telegram chat transcript:\n\n'
+                + transcript
+            ),
+            system_instruction=TLDR_SYSTEM_PROMPT,
+            session_id=f'tg:{msg.chat.id}:tldr',
+            model=model,
+            reasoning_effort=effort,
+        )
+        text = (
+            f'<b>📝 TLDR ({len(history)} msgs)</b>\n\n'
+            f'{escape(response)}'
+        )
+        file_text = (
+            f'TLDR ({len(history)} msgs)\n\n{response}'
+        )
+        await utils.edit_or_send_as_text_file(
+            msg,
+            text,
+            file_text=file_text,
+            filename=f'tldr-{msg.id}.txt',
+        )
+    except Exception as e:
+        await msg.edit(
+            f'<b>TLDR error:</b> <code>{escape(str(e))}</code>',
+            parse_mode=ParseMode.HTML,
+        )
+
+
+@ai_router.message(
+    filters.command(['tr', 'translate'], prefixes='.')
+)
+async def ai_translate(
+    msg: Message,
+    codex: CodexClient,
+    redis: Redis,
+):
+    """Translate text. .tr [lang] <text|reply>."""
+    text = msg.text or ''
+    parts = text.split(maxsplit=2)
+
+    target = 'English'
+    body = ''
+    if len(parts) >= 2 and len(parts[1]) <= 12 and (
+        parts[1].isalpha() or '-' in parts[1]
+    ):
+        target = parts[1]
+        body = parts[2].strip() if len(parts) >= 3 else ''
+    elif len(parts) >= 2:
+        body = parts[1].strip()
+        if len(parts) == 3:
+            body = (body + ' ' + parts[2]).strip()
+
+    if not body and msg.reply_to_message:
+        body = (
+            msg.reply_to_message.text
+            or msg.reply_to_message.caption
+            or ''
+        ).strip()
+
+    if not body:
+        await msg.edit(
+            '<b>Usage:</b> '
+            '<code>.tr [lang] &lt;text&gt;</code> '
+            'or reply to a message.',
+            parse_mode=ParseMode.HTML,
+        )
+        return
+
+    await msg.edit(
+        '<b>Translate:</b> <i>working…</i>',
+        parse_mode=ParseMode.HTML,
+    )
+
+    try:
+        model, effort, _, _ = await _get_ai_preferences(
+            redis, codex
+        )
+        response = await codex.generate(
+            prompt=(
+                f'Target language: {target}\n\n'
+                f'Source text:\n{body}'
+            ),
+            system_instruction=TRANSLATE_SYSTEM_PROMPT,
+            session_id=f'tg:{msg.chat.id}:tr',
+            model=model,
+            reasoning_effort=effort,
+        )
+        out = (
+            f'<b>🌐 {escape(target)}</b>\n\n'
+            f'{escape(response)}'
+        )
+        await utils.edit_or_send_as_text_file(
+            msg,
+            out,
+            file_text=f'[{target}]\n{response}',
+            filename=f'translate-{msg.id}.txt',
+        )
+    except Exception as e:
+        await msg.edit(
+            f'<b>Translate error:</b> '
+            f'<code>{escape(str(e))}</code>',
+            parse_mode=ParseMode.HTML,
+        )
 
 
 @ai_router.message(filters.command('codexlogin', prefixes='.'))
