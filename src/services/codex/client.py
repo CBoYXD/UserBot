@@ -57,10 +57,15 @@ def _summarize_output(
     ]
     status = response.get('status')
     incomplete = response.get('incomplete_details')
-    return (
+    events = response.get('_debug_event_types')
+    base = (
         f'status={status!r} types={types!r} '
         f'incomplete={incomplete!r}'
     )
+    if events:
+        unique_events = sorted(set(events))
+        base += f' events={unique_events!r}'
+    return base
 
 
 def _passthrough_items(
