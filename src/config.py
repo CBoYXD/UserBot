@@ -1,4 +1,3 @@
-import asyncio
 import json
 from functools import lru_cache
 from logging import getLogger
@@ -67,21 +66,19 @@ class RuntimeSettings:
     def update(self, m, **kwargs):
         self.data.update(m, **kwargs)
 
-    def load(self):
-        raw = asyncio.run(self.redis.get(self.key))
+    async def load(self):
+        raw = await self.redis.get(self.key)
         if raw is None:
             self.data = {}
             return
         self.data = json.loads(raw.decode('utf-8'))
 
-    def save(self):
-        asyncio.run(
-            self.redis.set(
-                self.key,
-                json.dumps(
-                    self.data,
-                    ensure_ascii=False,
-                    indent=3,
-                ),
-            )
+    async def save(self):
+        await self.redis.set(
+            self.key,
+            json.dumps(
+                self.data,
+                ensure_ascii=False,
+                indent=3,
+            ),
         )

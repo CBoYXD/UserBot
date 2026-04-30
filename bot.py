@@ -51,7 +51,6 @@ def create_client(config: Config) -> Client:
 def build_runtime(config: Config):
     redis = get_redis_engine(config.redis)
     runtime_settings = RuntimeSettings(redis)
-    runtime_settings.load()
     codex = CodexClient(redis=redis)
     client = create_client(config)
     dispatcher = Dispatcher(
@@ -70,6 +69,7 @@ def build_runtime(config: Config):
 
 async def _run_async(client: Client, redis, dispatcher: Dispatcher) -> None:
     client.loop = asyncio.get_running_loop()
+    await dispatcher.runtime_settings.load()
     dispatcher.update_runtime_settings()
     dispatcher.register_routers()
     await client.start()
