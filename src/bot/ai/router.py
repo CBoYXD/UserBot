@@ -32,7 +32,7 @@ MAX_HISTORY = 20
 
 # ---------- chat ----------
 
-@ai_router.message(filters.command('ai', prefixes='.'))
+@ai_router.message(filters.command(['ai', 'ші'], prefixes='.'))
 async def ai_ask(
     msg: Message,
     codex: CodexClient,
@@ -81,7 +81,7 @@ async def ai_ask(
         )
 
 
-@ai_router.message(filters.command('chat', prefixes='.'))
+@ai_router.message(filters.command(['chat', 'чат'], prefixes='.'))
 async def ai_chat(
     msg: Message,
     codex: CodexClient,
@@ -388,7 +388,7 @@ def _sender_name(m: Message) -> str:
     return getattr(m.sender_chat, 'title', 'Channel')
 
 
-@ai_router.message(filters.command('tldr', prefixes='.'))
+@ai_router.message(filters.command(['tldr', 'коротко'], prefixes='.'))
 async def ai_tldr(
     msg: Message,
     codex: CodexClient,
@@ -497,7 +497,9 @@ def _parse_translate_args(msg: Message) -> tuple[str, str]:
 
 
 @ai_router.message(
-    filters.command(['tr', 'translate'], prefixes='.')
+    filters.command(
+        ['tr', 'translate', 'пер', 'переклад'], prefixes='.'
+    )
 )
 async def ai_translate(
     msg: Message,

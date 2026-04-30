@@ -27,7 +27,9 @@ intrp_router.router_filters = filters.me
 
 # ---------- .run ----------
 
-@intrp_router.message(filters.command('run', prefixes='.'))
+@intrp_router.message(
+    filters.command(['run', 'запуск'], prefixes='.')
+)
 async def exec_code(
     msg: Message,
     piston: PistonClient,
@@ -129,7 +131,9 @@ def _code_help_text() -> str:
     )
 
 
-@intrp_router.message(filters.command('code', prefixes='.'))
+@intrp_router.message(
+    filters.command(['code', 'код'], prefixes='.')
+)
 async def code_command(
     msg: Message,
     piston: PistonClient,
