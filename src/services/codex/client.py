@@ -42,6 +42,27 @@ def _extract_function_calls(
     ]
 
 
+def _summarize_output(
+    response: dict[str, Any] | None,
+) -> str:
+    if not response:
+        return 'no response'
+    output = response.get('output')
+    if not isinstance(output, list):
+        return f'output={output!r}'
+    types = [
+        item.get('type')
+        for item in output
+        if isinstance(item, dict)
+    ]
+    status = response.get('status')
+    incomplete = response.get('incomplete_details')
+    return (
+        f'status={status!r} types={types!r} '
+        f'incomplete={incomplete!r}'
+    )
+
+
 def _passthrough_items(
     response: dict[str, Any] | None,
 ) -> list[dict[str, Any]]:
@@ -198,6 +219,7 @@ class CodexClient:
         """
         extra_input: list[dict[str, Any]] = []
         last_text = ''
+        last_response: dict[str, Any] | None = None
         for _ in range(max_steps):
             text, response = await self._run_stream(
                 messages=messages,
@@ -210,13 +232,15 @@ class CodexClient:
             )
             if text:
                 last_text = text
+            last_response = response
 
             calls = _extract_function_calls(response)
             if not calls:
                 if last_text:
                     return last_text
+                debug = _summarize_output(response)
                 raise RuntimeError(
-                    'Codex returned an empty response'
+                    f'Codex returned an empty response ({debug})'
                 )
 
             for item in _passthrough_items(response):
@@ -247,8 +271,9 @@ class CodexClient:
                 )
         if last_text:
             return last_text
+        debug = _summarize_output(last_response)
         raise RuntimeError(
-            'Codex tool loop exceeded max steps'
+            f'Codex tool loop exceeded max steps ({debug})'
         )
 
     async def _run_stream(
