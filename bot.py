@@ -16,7 +16,6 @@ from src.bot.tools.dispatcher import Dispatcher
 from src.services.code_pars.piston import PistonClient
 from src.services.codex import CodexClient
 from src.bot.modules import routers
-from src.bot.modules.reminders import start_reminder_loop
 
 
 ROOT_DIR = Path(__file__).resolve().parent
@@ -67,11 +66,21 @@ async def _run_async(client: Client, redis, dispatcher: Dispatcher) -> None:
     dispatcher.update_runtime_settings()
     dispatcher.register_routers()
     await client.start()
-    await start_reminder_loop(redis, client)
     try:
         await idle()
     finally:
         await client.stop()
+        await redis.aclose()
+        await _cancel_pending_tasks()
+
+
+async def _cancel_pending_tasks() -> None:
+    current = asyncio.current_task()
+    pending = [t for t in asyncio.all_tasks() if t is not current and not t.done()]
+    for task in pending:
+        task.cancel()
+    if pending:
+        await asyncio.gather(*pending, return_exceptions=True)
 
 
 def run_bot() -> None:
