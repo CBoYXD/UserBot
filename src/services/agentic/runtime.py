@@ -9,6 +9,7 @@ from typing import Any
 from redis.asyncio import Redis
 
 from src.config import AgenticSettings, OllamaSettings
+from src.db import make_engine, make_session_factory
 from src.services.agentic.storage import AgenticStorage
 from src.services.agentic.tools import build_readonly_tools
 from src.services.ollama import OllamaClient
@@ -33,7 +34,10 @@ class AgenticRuntime:
         self.redis = redis
         self.settings = settings
         self.ollama_settings = ollama_settings
-        self.storage = AgenticStorage(settings.db_path)
+        engine = make_engine(settings.db_path)
+        self.storage = AgenticStorage(
+            engine, make_session_factory(engine)
+        )
         self.ollama = OllamaClient(
             base_url=ollama_settings.base_url,
             chat_model=ollama_settings.chat_model,
@@ -231,9 +235,9 @@ class AgenticRuntime:
             step = (
                 len(
                     [
-                        item
-                        for item in messages
-                        if item.get('role') == 'assistant'
+                        m
+                        for m in messages
+                        if m.get('role') == 'assistant'
                     ]
                 )
                 + 1
@@ -284,7 +288,9 @@ class AgenticRuntime:
                         event_type='loop_done',
                         payload={
                             'step': step,
-                            'answer': _preview(result.content, 1200),
+                            'answer': _preview(
+                                result.content, 1200
+                            ),
                         },
                     )
                     return result.content
