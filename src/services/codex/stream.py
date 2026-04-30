@@ -132,6 +132,7 @@ def process_sse_event(
     text_parts: list[str],
     final_response: dict[str, Any] | None,
     streamed_items: list[dict[str, Any]] | None = None,
+    seen_event_types: list[str] | None = None,
 ) -> dict[str, Any] | None:
     if not event_lines:
         return final_response
@@ -142,6 +143,8 @@ def process_sse_event(
 
     event = json.loads(payload)
     event_type = event.get('type')
+    if seen_event_types is not None and isinstance(event_type, str):
+        seen_event_types.append(event_type)
     if event_type == 'error':
         message = event.get('message') or 'Codex error'
         raise RuntimeError(str(message))
@@ -187,6 +190,7 @@ async def stream_response(
     headers = build_headers(credentials, session_id)
     text_parts: list[str] = []
     streamed_items: list[dict[str, Any]] = []
+    seen_event_types: list[str] = []
     final_response: dict[str, Any] | None = None
     async with http.stream(
         'POST',
@@ -213,6 +217,7 @@ async def stream_response(
                     text_parts,
                     final_response,
                     streamed_items,
+                    seen_event_types,
                 )
                 event_lines = []
                 continue
@@ -240,6 +245,10 @@ async def stream_response(
                     **final_response,
                     'output': list(streamed_items),
                 }
+    if final_response is not None:
+        final_response.setdefault(
+            '_debug_event_types', seen_event_types
+        )
 
     text = ''.join(text_parts).strip()
     if not text and final_response:
