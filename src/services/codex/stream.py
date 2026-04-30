@@ -18,6 +18,8 @@ def build_body(
     session_id: str | None,
     model: str,
     reasoning_effort: str,
+    tools: list[dict[str, Any]] | None = None,
+    extra_input: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     input_messages: list[dict[str, Any]] = []
     for index, message in enumerate(messages):
@@ -53,6 +55,9 @@ def build_body(
             }
         )
 
+    if extra_input:
+        input_messages.extend(extra_input)
+
     body: dict[str, Any] = {
         'model': model,
         'store': False,
@@ -63,6 +68,8 @@ def build_body(
         'tool_choice': 'auto',
         'parallel_tool_calls': True,
     }
+    if tools:
+        body['tools'] = tools
     if system_instruction:
         body['instructions'] = system_instruction
     if session_id:
@@ -167,7 +174,7 @@ async def stream_response(
     credentials: dict[str, Any],
     body: dict[str, Any],
     session_id: str | None,
-) -> str:
+) -> tuple[str, dict[str, Any] | None]:
     headers = build_headers(credentials, session_id)
     text_parts: list[str] = []
     final_response: dict[str, Any] | None = None
@@ -209,12 +216,6 @@ async def stream_response(
             )
 
     text = ''.join(text_parts).strip()
-    if text:
-        return text
-    if final_response:
-        fallback = extract_response_text(
-            final_response
-        ).strip()
-        if fallback:
-            return fallback
-    raise RuntimeError('Codex returned an empty response')
+    if not text and final_response:
+        text = extract_response_text(final_response).strip()
+    return text, final_response

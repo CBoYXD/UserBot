@@ -1,6 +1,7 @@
+import json
 import secrets
 import time
-from typing import Any
+from typing import Any, Awaitable, Callable
 
 import httpx
 from redis.asyncio import Redis
@@ -23,6 +24,42 @@ from src.services.codex.stream import (
     stream_response,
 )
 from src.services.codex.tokens import build_pkce_pair
+
+
+def _extract_function_calls(
+    response: dict[str, Any] | None,
+) -> list[dict[str, Any]]:
+    if not response:
+        return []
+    output = response.get('output')
+    if not isinstance(output, list):
+        return []
+    return [
+        item
+        for item in output
+        if isinstance(item, dict)
+        and item.get('type') == 'function_call'
+    ]
+
+
+def _passthrough_items(
+    response: dict[str, Any] | None,
+) -> list[dict[str, Any]]:
+    """Items from the model's previous turn that must be echoed back
+    in the next request so reasoning state and pending tool calls are
+    preserved across turns."""
+    if not response:
+        return []
+    output = response.get('output')
+    if not isinstance(output, list):
+        return []
+    items: list[dict[str, Any]] = []
+    for item in output:
+        if not isinstance(item, dict):
+            continue
+        if item.get('type') in {'reasoning', 'function_call'}:
+            items.append(item)
+    return items
 
 
 class CodexClient:
@@ -129,6 +166,101 @@ class CodexClient:
         model: str | None = None,
         reasoning_effort: str | None = None,
     ) -> str:
+        text, _ = await self._run_stream(
+            messages=messages,
+            system_instruction=system_instruction,
+            session_id=session_id,
+            model=model,
+            reasoning_effort=reasoning_effort,
+        )
+        if not text:
+            raise RuntimeError('Codex returned an empty response')
+        return text
+
+    async def chat_with_tools(
+        self,
+        messages: list[dict[str, str]],
+        tools: list[dict[str, Any]],
+        dispatch: Callable[
+            [str, dict[str, Any]], Awaitable[str]
+        ],
+        system_instruction: str | None = None,
+        session_id: str | None = None,
+        model: str | None = None,
+        reasoning_effort: str | None = None,
+        max_steps: int = 4,
+    ) -> str:
+        """Run a multi-turn loop that lets the model call tools.
+
+        ``dispatch(name, args)`` runs the requested tool and returns
+        a string the model will see as the tool's output. It should
+        also persist any side-effect artifacts (e.g. images) itself.
+        """
+        extra_input: list[dict[str, Any]] = []
+        last_text = ''
+        for _ in range(max_steps):
+            text, response = await self._run_stream(
+                messages=messages,
+                system_instruction=system_instruction,
+                session_id=session_id,
+                model=model,
+                reasoning_effort=reasoning_effort,
+                tools=tools,
+                extra_input=extra_input,
+            )
+            if text:
+                last_text = text
+
+            calls = _extract_function_calls(response)
+            if not calls:
+                if last_text:
+                    return last_text
+                raise RuntimeError(
+                    'Codex returned an empty response'
+                )
+
+            for item in _passthrough_items(response):
+                extra_input.append(item)
+
+            for call in calls:
+                try:
+                    args = (
+                        json.loads(call.get('arguments') or '{}')
+                        if isinstance(call.get('arguments'), str)
+                        else (call.get('arguments') or {})
+                    )
+                except json.JSONDecodeError as e:
+                    output = f'invalid arguments: {e}'
+                else:
+                    try:
+                        output = await dispatch(
+                            call.get('name', ''), args
+                        )
+                    except Exception as e:
+                        output = f'error: {e}'
+                extra_input.append(
+                    {
+                        'type': 'function_call_output',
+                        'call_id': call.get('call_id'),
+                        'output': output,
+                    }
+                )
+        if last_text:
+            return last_text
+        raise RuntimeError(
+            'Codex tool loop exceeded max steps'
+        )
+
+    async def _run_stream(
+        self,
+        messages: list[dict[str, str]],
+        system_instruction: str | None,
+        session_id: str | None,
+        model: str | None,
+        reasoning_effort: str | None,
+        tools: list[dict[str, Any]] | None = None,
+        extra_input: list[dict[str, Any]] | None = None,
+    ) -> tuple[str, dict[str, Any] | None]:
         credentials = await self._ensure_valid_credentials()
         body = build_body(
             messages=messages,
@@ -138,6 +270,8 @@ class CodexClient:
             reasoning_effort=(
                 reasoning_effort or self._reasoning_effort
             ),
+            tools=tools,
+            extra_input=extra_input,
         )
         try:
             return await stream_response(
