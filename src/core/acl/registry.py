@@ -1,7 +1,7 @@
 """Known modules and commands available for grants.
 
-`afk` and `codex*` settings/auth commands stay owner-only and are
-deliberately omitted here.
+`codex*` settings/auth commands stay owner-only and are deliberately
+omitted here.
 """
 
 
