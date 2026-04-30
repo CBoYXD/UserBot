@@ -25,18 +25,21 @@ class WeatherService:
     async def _geocode(
         self, http: httpx.AsyncClient, city: str
     ) -> dict | None:
-        resp = await http.get(
-            GEOCODE_URL,
-            params={
-                'name': city,
-                'count': 1,
-                'language': 'en',
-                'format': 'json',
-            },
-        )
-        resp.raise_for_status()
-        results = resp.json().get('results') or []
-        return results[0] if results else None
+        for language in ('uk', 'ru', 'en'):
+            resp = await http.get(
+                GEOCODE_URL,
+                params={
+                    'name': city,
+                    'count': 1,
+                    'language': language,
+                    'format': 'json',
+                },
+            )
+            resp.raise_for_status()
+            results = resp.json().get('results') or []
+            if results:
+                return results[0]
+        return None
 
     async def _current(
         self, http: httpx.AsyncClient, place: dict
