@@ -4,17 +4,40 @@ from pyrogram.types import Message
 
 
 def extract_prompt(msg: Message) -> str:
-    """Extract prompt text from message (after command)."""
+    """Extract prompt text from message (after command).
+
+    Returns the combined prompt for the AI: the user-typed text plus
+    the replied-to message text (if any) as additional context.
+    """
     text = msg.text or ''
     parts = text.split(maxsplit=1)
-    if len(parts) < 2:
-        if msg.reply_to_message:
-            return msg.reply_to_message.text or ''
-        return ''
-    prompt = parts[1].strip()
-    if msg.reply_to_message and msg.reply_to_message.text:
-        prompt += '\n\n' + msg.reply_to_message.text
-    return prompt
+    typed = parts[1].strip() if len(parts) >= 2 else ''
+    reply_text = ''
+    if msg.reply_to_message:
+        reply_text = (
+            msg.reply_to_message.text
+            or msg.reply_to_message.caption
+            or ''
+        ).strip()
+    if typed and reply_text:
+        return typed + '\n\n' + reply_text
+    return typed or reply_text
+
+
+def extract_display_prompt(msg: Message) -> str:
+    """User-typed prompt only (no replied-to text), for display."""
+    text = msg.text or ''
+    parts = text.split(maxsplit=1)
+    typed = parts[1].strip() if len(parts) >= 2 else ''
+    if typed:
+        return typed
+    if msg.reply_to_message:
+        return (
+            msg.reply_to_message.text
+            or msg.reply_to_message.caption
+            or ''
+        ).strip()
+    return ''
 
 
 def build_ai_response(
