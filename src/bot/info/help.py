@@ -90,13 +90,6 @@ COMMAND_SECTIONS: list[tuple[str, list[tuple[str, str]]]] = [
         ],
     ),
     (
-        '🚫 AFK',
-        [
-            ('.afk [reason]', 'Enable AFK auto-reply.'),
-            ('.unafk', 'Disable AFK.'),
-        ],
-    ),
-    (
         '🎉 Fun',
         [
             (
