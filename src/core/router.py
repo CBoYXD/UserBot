@@ -127,6 +127,7 @@ class Router:
 
         @wraps(fn)
         async def wrapper(client: Client, update: Update):
+            _maybe_install_reply_shim(update)
             kwargs = {
                 **self.dp_kwargs,
                 'client': client,
@@ -337,3 +338,39 @@ class Router:
                 if handler[0].callback.__name__
                 not in exclude_handlers
             ]
+
+
+def _maybe_install_reply_shim(update) -> None:
+    """For messages we cannot edit (sender is not us), redirect ``edit``
+    and ``delete`` to a bot-owned reply so existing handlers work as-is.
+    """
+    if not isinstance(update, Message):
+        return
+    sender = getattr(update, 'from_user', None)
+    if sender is None or sender.is_self:
+        return
+    if getattr(update, '_acl_shim', False):
+        return
+
+    sent_holder: list = []
+
+    async def _edit(text=None, *args, **kwargs):
+        if not sent_holder:
+            sent_holder.append(
+                await update.reply_text(text, *args, **kwargs)
+            )
+        else:
+            await sent_holder[-1].edit_text(text, *args, **kwargs)
+        return sent_holder[-1]
+
+    async def _delete(*args, **kwargs):
+        if sent_holder:
+            try:
+                await sent_holder[-1].delete()
+            except Exception:
+                pass
+
+    update.edit = _edit
+    update.edit_text = _edit
+    update.delete = _delete
+    update._acl_shim = True

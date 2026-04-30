@@ -1,16 +1,15 @@
 from html import escape
 
-from pyrogram import filters
 from pyrogram.enums import ParseMode
 from pyrogram.types import Message
 
+from src.core.acl import cmd
 from src.core.router import Router
 from src.services.crypto import CryptoService
 from src.services.weather import WeatherService
 
 
 info_router = Router('info')
-info_router.router_filters = filters.me
 
 
 def _extract_arg(msg: Message) -> str:
@@ -19,7 +18,7 @@ def _extract_arg(msg: Message) -> str:
     return parts[1].strip() if len(parts) > 1 else ''
 
 
-@info_router.message(filters.command('weather', prefixes='.'))
+@info_router.message(cmd('info', 'weather'))
 async def weather_cmd(msg: Message, weather: WeatherService):
     city = _extract_arg(msg)
     if not city:
@@ -63,9 +62,7 @@ async def weather_cmd(msg: Message, weather: WeatherService):
     await msg.edit(text, parse_mode=ParseMode.HTML)
 
 
-@info_router.message(
-    filters.command(['crypto', 'price'], prefixes='.')
-)
+@info_router.message(cmd('info', 'crypto', 'price'))
 async def crypto_cmd(msg: Message, crypto: CryptoService):
     arg = _extract_arg(msg)
     if not arg:

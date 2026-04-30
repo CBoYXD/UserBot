@@ -1,3 +1,4 @@
+from src.bot.acl import acl_router
 from src.bot.afk import afk_router
 from src.bot.ai import ai_router
 from src.bot.fun import fun_router
@@ -14,4 +15,5 @@ routers = [
     afk_router,
     quote_router,
     info_router,
+    acl_router,
 ]

@@ -6,6 +6,7 @@ from pyrogram.types import Message
 from redis.asyncio import Redis
 
 from src.core import utils
+from src.core.acl import cmd
 from src.core.router import Router
 from src.bot.ai.helpers import build_ai_response, extract_prompt
 from src.bot.ai.prefs import (
@@ -23,7 +24,6 @@ from src.services.codex import CodexClient
 
 
 ai_router = Router('ai')
-ai_router.router_filters = filters.me
 
 
 _chat_histories: dict[int, list[dict[str, str]]] = {}
@@ -32,7 +32,7 @@ MAX_HISTORY = 20
 
 # ---------- chat ----------
 
-@ai_router.message(filters.command('ai', prefixes='.'))
+@ai_router.message(cmd('ai', 'ai'))
 async def ai_ask(
     msg: Message,
     codex: CodexClient,
@@ -81,7 +81,7 @@ async def ai_ask(
         )
 
 
-@ai_router.message(filters.command('chat', prefixes='.'))
+@ai_router.message(cmd('ai', 'chat'))
 async def ai_chat(
     msg: Message,
     codex: CodexClient,
@@ -141,7 +141,7 @@ async def ai_chat(
         )
 
 
-@ai_router.message(filters.command('chatclear', prefixes='.'))
+@ai_router.message(cmd('ai', 'chatclear'))
 async def ai_chat_clear(msg: Message):
     """Clear chat history for current chat."""
     chat_id = msg.chat.id
@@ -154,7 +154,9 @@ async def ai_chat_clear(msg: Message):
 
 # ---------- codex settings ----------
 
-@ai_router.message(filters.command('aimodel', prefixes='.'))
+@ai_router.message(
+    filters.me & filters.command('aimodel', prefixes='.')
+)
 async def ai_model_info(
     msg: Message,
     codex: CodexClient,
@@ -174,7 +176,9 @@ async def ai_model_info(
     )
 
 
-@ai_router.message(filters.command('codexmodel', prefixes='.'))
+@ai_router.message(
+    filters.me & filters.command('codexmodel', prefixes='.')
+)
 async def codex_model(
     msg: Message,
     codex: CodexClient,
@@ -205,7 +209,9 @@ async def codex_model(
     )
 
 
-@ai_router.message(filters.command('codexeffort', prefixes='.'))
+@ai_router.message(
+    filters.me & filters.command('codexeffort', prefixes='.')
+)
 async def codex_effort(
     msg: Message,
     codex: CodexClient,
@@ -246,7 +252,9 @@ async def codex_effort(
     )
 
 
-@ai_router.message(filters.command('codexreset', prefixes='.'))
+@ai_router.message(
+    filters.me & filters.command('codexreset', prefixes='.')
+)
 async def codex_reset(
     msg: Message,
     codex: CodexClient,
@@ -265,7 +273,9 @@ async def codex_reset(
     )
 
 
-@ai_router.message(filters.command('codexlogin', prefixes='.'))
+@ai_router.message(
+    filters.me & filters.command('codexlogin', prefixes='.')
+)
 async def codex_login(msg: Message, codex: CodexClient):
     """Start Codex OAuth flow."""
     url = await codex.begin_oauth()
@@ -281,7 +291,9 @@ async def codex_login(msg: Message, codex: CodexClient):
     )
 
 
-@ai_router.message(filters.command('codexauth', prefixes='.'))
+@ai_router.message(
+    filters.me & filters.command('codexauth', prefixes='.')
+)
 async def codex_auth(
     msg: Message,
     codex: CodexClient,
@@ -323,7 +335,9 @@ async def codex_auth(
         )
 
 
-@ai_router.message(filters.command('codexstatus', prefixes='.'))
+@ai_router.message(
+    filters.me & filters.command('codexstatus', prefixes='.')
+)
 async def codex_status(
     msg: Message,
     codex: CodexClient,
@@ -361,7 +375,9 @@ async def codex_status(
     )
 
 
-@ai_router.message(filters.command('codexlogout', prefixes='.'))
+@ai_router.message(
+    filters.me & filters.command('codexlogout', prefixes='.')
+)
 async def codex_logout(msg: Message, codex: CodexClient):
     """Clear Codex auth state."""
     await codex.logout()
@@ -388,7 +404,7 @@ def _sender_name(m: Message) -> str:
     return getattr(m.sender_chat, 'title', 'Channel')
 
 
-@ai_router.message(filters.command('tldr', prefixes='.'))
+@ai_router.message(cmd('ai', 'tldr'))
 async def ai_tldr(
     msg: Message,
     codex: CodexClient,
@@ -496,9 +512,7 @@ def _parse_translate_args(msg: Message) -> tuple[str, str]:
     return target, body
 
 
-@ai_router.message(
-    filters.command(['tr', 'translate'], prefixes='.')
-)
+@ai_router.message(cmd('ai', 'tr', 'translate'))
 async def ai_translate(
     msg: Message,
     codex: CodexClient,

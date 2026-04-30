@@ -12,6 +12,7 @@ from src.config import (
     RuntimeSettings,
     get_redis_engine,
 )
+from src.core.acl import init_acl
 from src.core.dispatcher import Dispatcher
 from src.services.code_pars.piston import PistonClient
 from src.services.codex import CodexClient
@@ -50,6 +51,7 @@ def create_client(config: Config) -> Client:
 
 def build_runtime(config: Config):
     redis = get_redis_engine(config.redis)
+    init_acl(redis)
     runtime_settings = RuntimeSettings(redis)
     codex = CodexClient(redis=redis)
     client = create_client(config)

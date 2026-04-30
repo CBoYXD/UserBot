@@ -1,17 +1,16 @@
 from html import escape
 
-from pyrogram import filters
 from pyrogram.enums import ParseMode
 from pyrogram.types import Message
 from redis.asyncio import Redis
 
 from src.core import utils
+from src.core.acl import cmd
 from src.core.router import Router
 from src.bot.notes import storage
 
 
 notes_router = Router('notes')
-notes_router.router_filters = filters.me
 
 
 def _extract_body(msg: Message) -> str:
@@ -25,7 +24,7 @@ def _truncate(text: str, n: int = 80) -> str:
     return text if len(text) <= n else text[: n - 3] + '...'
 
 
-@notes_router.message(filters.command('note', prefixes='.'))
+@notes_router.message(cmd('notes', 'note'))
 async def note_cmd(msg: Message, redis: Redis):
     body = _extract_body(msg)
     sub, _, rest = body.partition(' ')
@@ -69,7 +68,7 @@ async def note_cmd(msg: Message, redis: Redis):
     )
 
 
-@notes_router.message(filters.command('notes', prefixes='.'))
+@notes_router.message(cmd('notes', 'notes'))
 async def notes_list(msg: Message, redis: Redis):
     body = _extract_body(msg)
     items = await storage.all_notes(redis)
