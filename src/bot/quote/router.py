@@ -36,13 +36,13 @@ async def quote_cmd(
         return
 
     try:
-        png = await quote.render_for_message(client, target)
-        bio = io.BytesIO(png)
-        bio.name = 'quote.png'
+        webp = await quote.render_for_message(client, target)
+        bio = io.BytesIO(webp)
+        bio.name = 'quote.webp'
         await msg.delete()
-        await client.send_photo(
+        await client.send_sticker(
             chat_id=msg.chat.id,
-            photo=bio,
+            sticker=bio,
             reply_to_message_id=target.id,
         )
     except Exception as e:

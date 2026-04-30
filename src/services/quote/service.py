@@ -1,7 +1,8 @@
 from pyrogram import Client
 from pyrogram.types import Message
 
-from src.services.quote.avatar import fetch_avatar
+from src.services.quote.avatar import build_avatar
+from src.services.quote.constants import AVATAR_SIZE
 from src.services.quote.render import render_quote
 
 
@@ -11,8 +12,10 @@ class QuoteService:
     ) -> bytes:
         name = self._display_name(target)
         text = (target.text or target.caption or '').strip()
-        avatar = await fetch_avatar(client, target.from_user)
-        return render_quote(name, text, avatar)
+        user = target.from_user or target.sender_chat
+        user_id = getattr(user, 'id', None)
+        avatar = await build_avatar(client, user, AVATAR_SIZE)
+        return render_quote(name, text, avatar, user_id)
 
     @staticmethod
     def _display_name(target: Message) -> str:
