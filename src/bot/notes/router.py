@@ -4,9 +4,9 @@ from pyrogram.enums import ParseMode
 from pyrogram.types import Message
 from redis.asyncio import Redis
 
-from src.core import utils
 from src.core.acl import cmd
 from src.core.router import Router
+from src.bot import utils
 from src.bot.notes import storage
 
 
@@ -24,7 +24,7 @@ def _truncate(text: str, n: int = 80) -> str:
     return text if len(text) <= n else text[: n - 3] + '...'
 
 
-@notes_router.message(cmd('notes', 'note'))
+@notes_router.message(cmd('notes', 'note', 'нотатка'))
 async def note_cmd(msg: Message, redis: Redis):
     body = _extract_body(msg)
     sub, _, rest = body.partition(' ')
@@ -68,7 +68,7 @@ async def note_cmd(msg: Message, redis: Redis):
     )
 
 
-@notes_router.message(cmd('notes', 'notes'))
+@notes_router.message(cmd('notes', 'notes', 'нотатки'))
 async def notes_list(msg: Message, redis: Redis):
     body = _extract_body(msg)
     items = await storage.all_notes(redis)

@@ -7,11 +7,20 @@ deliberately omitted here.
 
 MODULES: dict[str, set[str]] = {
     'fun': {'type', 'тайп', 'spam', 'спам'},
-    'info': {'weather', 'crypto', 'price'},
-    'quote': {'q', 'quote'},
-    'notes': {'note', 'notes'},
-    'interpreters': {'run', 'py', 'code'},
-    'ai': {'ai', 'chat', 'chatclear', 'tldr', 'tr', 'translate'},
+    'info': {
+        'weather', 'погода',
+        'crypto', 'price', 'крипто', 'ціна',
+    },
+    'quote': {'q', 'quote', 'ц', 'цитата'},
+    'notes': {'note', 'нотатка', 'notes', 'нотатки'},
+    'interpreters': {'run', 'запуск', 'py', 'code', 'код'},
+    'ai': {
+        'ai', 'ші',
+        'chat', 'чат',
+        'chatclear',
+        'tldr', 'коротко',
+        'tr', 'translate', 'пер', 'переклад',
+    },
 }
 
 ALL_COMMANDS: set[str] = {

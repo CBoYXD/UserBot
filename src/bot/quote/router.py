@@ -3,7 +3,7 @@ from html import escape
 
 from pyrogram import Client
 from pyrogram.enums import ParseMode
-from pyrogram.types import Message
+from pyrogram.types import Message, ReplyParameters
 
 from src.core.acl import cmd
 from src.core.router import Router
@@ -13,7 +13,7 @@ from src.services.quote import QuoteService
 quote_router = Router('quote')
 
 
-@quote_router.message(cmd('quote', 'q', 'quote'))
+@quote_router.message(cmd('quote', 'q', 'quote', 'ц', 'цитата'))
 async def quote_cmd(
     msg: Message, client: Client, quote: QuoteService
 ):
@@ -41,7 +41,7 @@ async def quote_cmd(
         await client.send_sticker(
             chat_id=msg.chat.id,
             sticker=bio,
-            reply_to_message_id=target.id,
+            reply_parameters=ReplyParameters(message_id=target.id),
         )
     except Exception as e:
         await msg.edit(

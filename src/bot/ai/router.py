@@ -5,9 +5,9 @@ from pyrogram.enums import ParseMode
 from pyrogram.types import Message
 from redis.asyncio import Redis
 
-from src.core import utils
 from src.core.acl import cmd
 from src.core.router import Router
+from src.bot import utils
 from src.bot.ai.helpers import build_ai_response, extract_prompt
 from src.bot.ai.prefs import (
     AI_EFFORT_KEY,
@@ -32,7 +32,7 @@ MAX_HISTORY = 20
 
 # ---------- chat ----------
 
-@ai_router.message(cmd('ai', 'ai'))
+@ai_router.message(cmd('ai', 'ai', 'ші'))
 async def ai_ask(
     msg: Message,
     codex: CodexClient,
@@ -81,7 +81,7 @@ async def ai_ask(
         )
 
 
-@ai_router.message(cmd('ai', 'chat'))
+@ai_router.message(cmd('ai', 'chat', 'чат'))
 async def ai_chat(
     msg: Message,
     codex: CodexClient,
@@ -404,7 +404,7 @@ def _sender_name(m: Message) -> str:
     return getattr(m.sender_chat, 'title', 'Channel')
 
 
-@ai_router.message(cmd('ai', 'tldr'))
+@ai_router.message(cmd('ai', 'tldr', 'коротко'))
 async def ai_tldr(
     msg: Message,
     codex: CodexClient,
@@ -512,7 +512,9 @@ def _parse_translate_args(msg: Message) -> tuple[str, str]:
     return target, body
 
 
-@ai_router.message(cmd('ai', 'tr', 'translate'))
+@ai_router.message(
+    cmd('ai', 'tr', 'translate', 'пер', 'переклад')
+)
 async def ai_translate(
     msg: Message,
     codex: CodexClient,
