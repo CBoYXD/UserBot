@@ -4,6 +4,8 @@ from pyrogram import filters
 from pyrogram.enums import ParseMode
 from pyrogram.types import Message
 
+from src.bot import utils
+from src.bot.info.help import build_info_html, build_info_text
 from src.core.router import Router
 from src.services.crypto import CryptoService
 from src.services.weather import WeatherService
@@ -17,6 +19,20 @@ def _extract_arg(msg: Message) -> str:
     text = msg.text or ''
     parts = text.split(maxsplit=1)
     return parts[1].strip() if len(parts) > 1 else ''
+
+
+@info_router.message(
+    filters.command(
+        ['info', 'help', 'команди', 'допомога'], prefixes='.'
+    )
+)
+async def info_cmd(msg: Message):
+    await utils.edit_or_send_as_text_file(
+        msg,
+        build_info_html(),
+        file_text=build_info_text(),
+        filename=f'commands-{msg.id}.txt',
+    )
 
 
 @info_router.message(
