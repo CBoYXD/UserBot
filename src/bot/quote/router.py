@@ -14,7 +14,9 @@ quote_router.router_filters = filters.me
 
 
 @quote_router.message(
-    filters.command(['q', 'quote'], prefixes='.')
+    filters.command(
+        ['q', 'quote', 'ц', 'цитата'], prefixes='.'
+    )
 )
 async def quote_cmd(
     msg: Message, client: Client, quote: QuoteService

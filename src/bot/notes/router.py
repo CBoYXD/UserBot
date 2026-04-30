@@ -25,7 +25,9 @@ def _truncate(text: str, n: int = 80) -> str:
     return text if len(text) <= n else text[: n - 3] + '...'
 
 
-@notes_router.message(filters.command('note', prefixes='.'))
+@notes_router.message(
+    filters.command(['note', 'нотатка'], prefixes='.')
+)
 async def note_cmd(msg: Message, redis: Redis):
     body = _extract_body(msg)
     sub, _, rest = body.partition(' ')
@@ -69,7 +71,9 @@ async def note_cmd(msg: Message, redis: Redis):
     )
 
 
-@notes_router.message(filters.command('notes', prefixes='.'))
+@notes_router.message(
+    filters.command(['notes', 'нотатки'], prefixes='.')
+)
 async def notes_list(msg: Message, redis: Redis):
     body = _extract_body(msg)
     items = await storage.all_notes(redis)
