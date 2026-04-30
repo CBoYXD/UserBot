@@ -44,6 +44,10 @@ COMMAND_SECTIONS: list[tuple[str, list[tuple[str, str]]]] = [
                 'Show recent stored context for this chat.',
             ),
             (
+                '.agent trace [N|here N|trace_id]',
+                'Show local agent loop/tool-call trace events.',
+            ),
+            (
                 '.agent autoreply on|off',
                 'Configure auto-reply flag for this chat.',
             ),

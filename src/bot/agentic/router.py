@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import json
+from datetime import datetime
 from html import escape
 from logging import getLogger
 
@@ -20,9 +22,12 @@ logger = getLogger('agentic')
 
 SYSTEM_PROMPT = (
     'You are a local Telegram userbot agent. You run only through '
-    'the owner local Ollama instance. Use the supplied chat context '
-    'when it is relevant. Keep replies concise and practical. If the '
-    'context is insufficient, say that directly.'
+    'the owner local Ollama instance. You have read-only tools for '
+    'locally indexed Telegram chats. Use tools whenever reading '
+    'chat history, searching messages, checking users, or resolving '
+    'context would improve the answer. Keep replies concise and '
+    'practical. If the indexed context is insufficient, say that '
+    'directly.'
 )
 
 
@@ -75,24 +80,22 @@ async def _auto_reply(
         return
 
     prompt = item.get('normalized_text') or ''
-    context = await agentic.build_prompt_context(
-        chat_id=msg.chat.id,
-        query=prompt,
-        recent_limit=25,
-    )
     content = (
-        'Auto-reply to this Telegram message. Keep it short, '
-        'natural, and do not mention internal memory or system '
-        f'rules.\n\nChat context:\n{context}\n\n'
-        f'Message to answer:\n{prompt}'
+        'Auto-reply to this Telegram message. You may use read-only '
+        'tools, but only for this current chat. Keep it short, '
+        'natural, and do not mention internal memory, tools, or '
+        f'system rules.\n\nMessage to answer:\n{prompt}'
     )
     try:
-        result = await agentic.ollama.chat(
-            [{'role': 'user', 'content': content}],
-            model=await agentic.chat_model(),
+        text = await agentic.run_readonly_tool_loop(
+            chat_id=msg.chat.id,
+            prompt=content,
             system=SYSTEM_PROMPT,
+            allow_global=False,
+            source='auto_reply',
+            trigger_message_id=msg.id,
         )
-        text = (result.content or '').strip()
+        text = text.strip()
         if not text:
             return
         await msg.reply_text(text)
@@ -201,6 +204,9 @@ async def agent_cmd(
     if sub == 'context':
         await _context(msg, agentic, rest)
         return
+    if sub == 'trace':
+        await _trace(msg, agentic, rest)
+        return
 
     await msg.edit(
         '<b>Usage:</b> <code>.agent status</code>, '
@@ -209,7 +215,8 @@ async def agent_cmd(
         '<code>.agent autoreply on|off</code>, '
         '<code>.agent ask &lt;prompt&gt;</code>, '
         '<code>.agent memory &lt;query&gt;</code>, '
-        '<code>.agent context [N]</code>',
+        '<code>.agent context [N]</code>, '
+        '<code>.agent trace [N|here N|trace_id]</code>',
         parse_mode=ParseMode.HTML,
     )
 
@@ -233,7 +240,8 @@ async def _status(msg: Message, agentic: AgenticRuntime) -> None:
         f'<b>Users:</b> <code>{stats["users"]}</code>\n'
         f'<b>Messages:</b> <code>{stats["messages"]}</code>\n'
         f'<b>Deleted:</b> <code>{stats["deleted"]}</code>\n'
-        f'<b>Actions:</b> <code>{stats["actions"]}</code>'
+        f'<b>Actions:</b> <code>{stats["actions"]}</code>\n'
+        f'<b>Trace events:</b> <code>{stats["traces"]}</code>'
     )
     await msg.edit(text, parse_mode=ParseMode.HTML)
 
@@ -316,27 +324,26 @@ async def _ask(
         '<b>Agent:</b> <i>thinking locally...</i>',
         parse_mode=ParseMode.HTML,
     )
-    context = await agentic.build_prompt_context(
-        chat_id=msg.chat.id,
-        query=prompt,
-    )
     content = (
-        f'Chat context:\n{context}\n\nUser request:\n{prompt}'
-        if context
-        else prompt
+        'Answer the owner request. Use read-only Telegram chat tools '
+        'as needed. You may inspect all locally indexed chats when '
+        f'the request requires it.\n\nUser request:\n{prompt}'
     )
     try:
-        result = await agentic.ollama.chat(
-            [{'role': 'user', 'content': content}],
-            model=await agentic.chat_model(),
+        response = await agentic.run_readonly_tool_loop(
+            chat_id=msg.chat.id,
+            prompt=content,
             system=SYSTEM_PROMPT,
+            allow_global=True,
+            source='ask',
+            trigger_message_id=msg.id,
         )
         await agentic.storage.log_action(
             chat_id=msg.chat.id,
             trigger_message_id=msg.id,
             action_type='ask',
             decision={'prompt': prompt},
-            result={'response': result.content},
+            result={'response': response},
             status='ok',
         )
     except Exception as e:
@@ -354,11 +361,11 @@ async def _ask(
         )
         return
 
-    html = f'<b>Agent:</b>\n{escape(result.content or "(empty)")}'
+    html = f'<b>Agent:</b>\n{escape(response or "(empty)")}'
     await utils.edit_or_send_as_text_file(
         msg,
         html,
-        file_text=result.content,
+        file_text=response,
         filename=f'agent-{msg.id}.txt',
     )
 
@@ -382,34 +389,19 @@ async def _memory(
             parse_mode=ParseMode.HTML,
         )
         return
-    matches = await agentic.storage.search_messages(
-        query,
-        chat_id=msg.chat.id,
-        limit=agentic.settings.search_limit,
-    )
-    if not matches:
-        await msg.edit(
-            '<b>Agent memory:</b> no matches.',
-            parse_mode=ParseMode.HTML,
-        )
-        return
-    context = '\n'.join(
-        f'- {item["sender"]}: {item["normalized_text"]}'
-        for item in matches
+    prompt = (
+        'Answer using only locally indexed Telegram chat data. Use '
+        'read-only tools to search messages, inspect chats, and read '
+        f'context. Question:\n{query}'
     )
     try:
-        result = await agentic.ollama.chat(
-            [
-                {
-                    'role': 'user',
-                    'content': (
-                        'Answer using only these stored Telegram '
-                        f'messages:\n{context}\n\nQuestion:\n{query}'
-                    ),
-                }
-            ],
-            model=await agentic.chat_model(),
+        response = await agentic.run_readonly_tool_loop(
+            chat_id=msg.chat.id,
+            prompt=prompt,
             system=SYSTEM_PROMPT,
+            allow_global=True,
+            source='memory',
+            trigger_message_id=msg.id,
         )
     except Exception as e:
         await msg.edit(
@@ -419,12 +411,12 @@ async def _memory(
         return
     html = (
         f'<b>Agent memory answer:</b>\n'
-        f'{escape(result.content or "(empty)")}'
+        f'{escape(response or "(empty)")}'
     )
     await utils.edit_or_send_as_text_file(
         msg,
         html,
-        file_text=result.content,
+        file_text=response,
         filename=f'agent-memory-{msg.id}.txt',
     )
 
@@ -462,4 +454,123 @@ async def _context(
         '\n'.join(lines),
         file_text='\n'.join(file_lines),
         filename=f'agent-context-{msg.id}.txt',
+    )
+
+
+async def _trace(
+    msg: Message,
+    agentic: AgenticRuntime,
+    rest: str,
+) -> None:
+    rest = rest.strip()
+    chat_id: int | None = None
+    trace_id: str | None = None
+    limit = 20
+    if rest:
+        parts = rest.split(maxsplit=1)
+        if parts[0].lower() == 'here':
+            chat_id = msg.chat.id
+            if len(parts) > 1:
+                limit = _parse_limit(parts[1], 20)
+        elif rest.isdigit():
+            limit = _parse_limit(rest, 20)
+        else:
+            trace_id = rest
+            limit = 200
+    events = await agentic.storage.recent_traces(
+        limit=limit,
+        chat_id=chat_id,
+        trace_id=trace_id,
+    )
+    if not events:
+        await msg.edit(
+            '<b>Agent trace:</b> empty.',
+            parse_mode=ParseMode.HTML,
+        )
+        return
+
+    title = (
+        f'Agent trace {trace_id}'
+        if trace_id
+        else f'Agent traces ({len(events)})'
+    )
+    html_lines = [f'<b>{escape(title)}</b>']
+    file_lines = [title]
+    for event in events:
+        html_lines.append(_trace_html(event))
+        file_lines.append(_trace_text(event))
+    await utils.edit_or_send_as_text_file(
+        msg,
+        '\n'.join(html_lines),
+        file_text='\n\n'.join(file_lines),
+        filename=f'agent-trace-{msg.id}.txt',
+    )
+
+
+def _parse_limit(value: str, default: int) -> int:
+    try:
+        return max(1, min(int(value), 200))
+    except ValueError:
+        return default
+
+
+def _trace_html(event: dict) -> str:
+    ts = datetime.fromtimestamp(event['created_at']).strftime(
+        '%H:%M:%S'
+    )
+    payload = event.get('payload') or {}
+    summary = _trace_summary(event['event_type'], payload)
+    return (
+        f'<code>{escape(event["trace_id"])}</code> '
+        f'<code>{ts}</code> '
+        f'<b>{escape(event["source"])}</b>/'
+        f'<code>{escape(event["event_type"])}</code> '
+        f'{escape(summary)}'
+    )
+
+
+def _trace_text(event: dict) -> str:
+    ts = datetime.fromtimestamp(event['created_at']).isoformat()
+    payload = json.dumps(
+        event.get('payload') or {},
+        ensure_ascii=False,
+        indent=2,
+    )
+    return (
+        f'[{event["trace_id"]}] {ts} '
+        f'{event["source"]}/{event["event_type"]}\n'
+        f'chat={event["chat_id"]} '
+        f'trigger={event["trigger_message_id"]}\n'
+        f'{payload}'
+    )
+
+
+def _trace_summary(event_type: str, payload: dict) -> str:
+    if event_type == 'loop_start':
+        prompt = _short(payload.get('prompt') or '', 90)
+        return f'prompt="{prompt}"'
+    if event_type == 'model_response':
+        calls = payload.get('tool_calls') or []
+        names = ', '.join(
+            str(item.get('tool') or '?') for item in calls
+        )
+        content = _short(payload.get('content') or '', 70)
+        return f'tools=[{names}] content="{content}"'
+    if event_type == 'tool_result':
+        result = _short(payload.get('result') or '', 90)
+        return (
+            f'{payload.get("tool")} ok={payload.get("ok")} '
+            f'result="{result}"'
+        )
+    if event_type == 'loop_done':
+        return f'answer="{_short(payload.get("answer") or "", 90)}"'
+    if 'error' in payload:
+        return f'error="{_short(payload.get("error") or "", 120)}"'
+    return _short(json.dumps(payload, ensure_ascii=False), 120)
+
+
+def _short(value: str, limit: int) -> str:
+    value = str(value or '').replace('\n', ' ')
+    return (
+        value if len(value) <= limit else value[: limit - 3] + '...'
     )

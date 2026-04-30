@@ -84,12 +84,25 @@ Commands:
 .agent ask <prompt>
 .agent memory <query>
 .agent context [N]
+.agent trace [N|here N|trace_id]
 .agent autoreply on|off
 ```
 
 The agent stores durable local memory in SQLite at
-`AGENTIC__DB_PATH` and keeps hot state, recent context, health cache,
-and cooldowns in Redis. Embeddings are disabled by default.
+`AGENTIC__DB_PATH` and keeps only non-content hot state in Redis:
+settings, ids, health cache, and cooldowns. Embeddings are disabled by
+default.
+
+`.agent ask` and `.agent memory` run a local Ollama read-only tool
+loop over indexed Telegram data. Available tools can list indexed
+chats, read recent messages, search message text, fetch one message,
+read context around a message, inspect chat stats, and read messages
+from one user. Auto-reply uses the same tool loop, but it is restricted
+to the current chat.
+
+Use `.agent trace` to inspect what the local model did: loop starts,
+model responses, requested tools, tool results, errors, and final
+answers are written to local SQLite trace events.
 
 ### 6. Run code in Telegram
 
@@ -102,5 +115,8 @@ and cooldowns in Redis. Embeddings are disabled by default.
 7) Show snippet source with `.code show <name>`
 8) List snippets with `.code ls`
 9) Delete snippets with `.code rm <name>`
+
+Notes and code snippets are stored locally in SQLite at
+`data/userbot.sqlite3`, not in Redis.
 
 ### 7. Enjoy using the userbot

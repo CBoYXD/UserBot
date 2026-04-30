@@ -107,6 +107,23 @@ class AgenticStorage:
                     status text not null,
                     created_at integer not null
                 );
+
+                create table if not exists agent_traces (
+                    id integer primary key autoincrement,
+                    trace_id text not null,
+                    chat_id integer not null,
+                    trigger_message_id integer,
+                    source text not null,
+                    event_type text not null,
+                    payload_json text not null default '{}',
+                    created_at integer not null
+                );
+
+                create index if not exists idx_agent_traces_trace_id
+                on agent_traces(trace_id, id);
+
+                create index if not exists idx_agent_traces_chat_id
+                on agent_traces(chat_id, id);
                 """
             )
             await db.commit()
@@ -277,6 +294,181 @@ class AgenticStorage:
         items.reverse()
         return items
 
+    async def get_message(
+        self, chat_id: int, message_id: int
+    ) -> dict[str, Any] | None:
+        async with self._connect() as db:
+            cursor = await db.execute(
+                """
+                select m.*, u.first_name, u.last_name, u.username
+                from messages m
+                left join users u on u.user_id = m.sender_user_id
+                where m.chat_id = ?
+                  and m.message_id = ?
+                  and m.deleted_at is null
+                """,
+                (int(chat_id), int(message_id)),
+            )
+            row = await cursor.fetchone()
+        return self._row_to_message(row) if row else None
+
+    async def messages_around(
+        self,
+        chat_id: int,
+        message_id: int,
+        *,
+        before: int = 10,
+        after: int = 10,
+    ) -> list[dict[str, Any]]:
+        before = max(0, min(before, 100))
+        after = max(0, min(after, 100))
+        async with self._connect() as db:
+            before_cursor = await db.execute(
+                """
+                select m.*, u.first_name, u.last_name, u.username
+                from messages m
+                left join users u on u.user_id = m.sender_user_id
+                where m.chat_id = ?
+                  and m.message_id < ?
+                  and m.deleted_at is null
+                order by m.message_id desc
+                limit ?
+                """,
+                (int(chat_id), int(message_id), before),
+            )
+            before_rows = await before_cursor.fetchall()
+            current_cursor = await db.execute(
+                """
+                select m.*, u.first_name, u.last_name, u.username
+                from messages m
+                left join users u on u.user_id = m.sender_user_id
+                where m.chat_id = ?
+                  and m.message_id = ?
+                  and m.deleted_at is null
+                """,
+                (int(chat_id), int(message_id)),
+            )
+            current_row = await current_cursor.fetchone()
+            after_cursor = await db.execute(
+                """
+                select m.*, u.first_name, u.last_name, u.username
+                from messages m
+                left join users u on u.user_id = m.sender_user_id
+                where m.chat_id = ?
+                  and m.message_id > ?
+                  and m.deleted_at is null
+                order by m.message_id asc
+                limit ?
+                """,
+                (int(chat_id), int(message_id), after),
+            )
+            after_rows = await after_cursor.fetchall()
+        rows = list(reversed(before_rows))
+        if current_row:
+            rows.append(current_row)
+        rows.extend(after_rows)
+        return [self._row_to_message(row) for row in rows]
+
+    async def list_chats(
+        self,
+        *,
+        query: str | None = None,
+        limit: int = 30,
+    ) -> list[dict[str, Any]]:
+        limit = max(1, min(limit, 100))
+        params: list[Any] = []
+        where = ''
+        if query:
+            needle = f'%{query.strip()}%'
+            where = 'where title like ? or username like ?'
+            params.extend([needle, needle])
+        params.append(limit)
+        async with self._connect() as db:
+            cursor = await db.execute(
+                f"""
+                select c.*,
+                       (
+                         select count(*)
+                         from messages m
+                         where m.chat_id = c.chat_id
+                           and m.deleted_at is null
+                       ) as message_count
+                from chats c
+                {where}
+                order by c.last_seen_at desc
+                limit ?
+                """,
+                params,
+            )
+            rows = await cursor.fetchall()
+        return [self._row_to_chat(row) for row in rows]
+
+    async def chat_stats(self, chat_id: int) -> dict[str, Any]:
+        async with self._connect() as db:
+            chat_cursor = await db.execute(
+                'select * from chats where chat_id = ?',
+                (int(chat_id),),
+            )
+            chat = await chat_cursor.fetchone()
+            messages = await self._count(
+                db,
+                'messages',
+                f'chat_id = {int(chat_id)} and deleted_at is null',
+            )
+            deleted = await self._count(
+                db,
+                'messages',
+                f'chat_id = {int(chat_id)} and deleted_at is not null',
+            )
+            users_cursor = await db.execute(
+                """
+                select count(distinct sender_user_id)
+                from messages
+                where chat_id = ?
+                  and sender_user_id is not null
+                  and deleted_at is null
+                """,
+                (int(chat_id),),
+            )
+            users_row = await users_cursor.fetchone()
+        return {
+            'chat': self._row_to_chat(chat) if chat else None,
+            'messages': messages,
+            'deleted': deleted,
+            'users': int(users_row[0]) if users_row else 0,
+        }
+
+    async def user_messages(
+        self,
+        user_id: int,
+        *,
+        chat_id: int | None = None,
+        limit: int = 30,
+    ) -> list[dict[str, Any]]:
+        limit = max(1, min(limit, 100))
+        params: list[Any] = [int(user_id)]
+        where = 'm.sender_user_id = ? and m.deleted_at is null'
+        if chat_id is not None:
+            where += ' and m.chat_id = ?'
+            params.append(int(chat_id))
+        params.append(limit)
+        async with self._connect() as db:
+            cursor = await db.execute(
+                f"""
+                select m.*, u.first_name, u.last_name, u.username
+                from messages m
+                left join users u on u.user_id = m.sender_user_id
+                where {where}
+                order by m.message_id desc
+                limit ?
+                """,
+                params,
+            )
+            rows = await cursor.fetchall()
+        items = [self._row_to_message(row) for row in rows]
+        items.reverse()
+        return items
+
     async def search_messages(
         self,
         query: str,
@@ -325,12 +517,14 @@ class AgenticStorage:
                 'deleted_at is not null',
             )
             actions = await self._count(db, 'agent_actions')
+            traces = await self._count(db, 'agent_traces')
         return {
             'chats': chats,
             'users': users,
             'messages': messages,
             'deleted': deleted,
             'actions': actions,
+            'traces': traces,
         }
 
     async def log_action(
@@ -363,6 +557,70 @@ class AgenticStorage:
                 ),
             )
             await db.commit()
+
+    async def log_trace(
+        self,
+        *,
+        trace_id: str,
+        chat_id: int,
+        trigger_message_id: int | None,
+        source: str,
+        event_type: str,
+        payload: dict[str, Any],
+    ) -> None:
+        async with self._connect() as db:
+            await db.execute(
+                """
+                insert into agent_traces (
+                    trace_id, chat_id, trigger_message_id,
+                    source, event_type, payload_json, created_at
+                )
+                values (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    trace_id,
+                    int(chat_id),
+                    trigger_message_id,
+                    source,
+                    event_type,
+                    json.dumps(payload, ensure_ascii=False),
+                    int(time.time()),
+                ),
+            )
+            await db.commit()
+
+    async def recent_traces(
+        self,
+        *,
+        limit: int = 30,
+        chat_id: int | None = None,
+        trace_id: str | None = None,
+    ) -> list[dict[str, Any]]:
+        limit = max(1, min(limit, 200))
+        params: list[Any] = []
+        where = ''
+        if trace_id:
+            where = 'where trace_id = ?'
+            params.append(trace_id)
+        elif chat_id is not None:
+            where = 'where chat_id = ?'
+            params.append(int(chat_id))
+        params.append(limit)
+        async with self._connect() as db:
+            cursor = await db.execute(
+                f"""
+                select *
+                from agent_traces
+                {where}
+                order by id desc
+                limit ?
+                """,
+                params,
+            )
+            rows = await cursor.fetchall()
+        items = [self._row_to_trace(row) for row in rows]
+        items.reverse()
+        return items
 
     @asynccontextmanager
     async def _connect(
@@ -417,4 +675,37 @@ class AgenticStorage:
             'caption': row['caption'],
             'normalized_text': row['normalized_text'] or '',
             'media_type': row['media_type'],
+        }
+
+    @staticmethod
+    def _row_to_chat(row: aiosqlite.Row) -> dict[str, Any]:
+        return {
+            'chat_id': row['chat_id'],
+            'type': row['type'],
+            'title': row['title'],
+            'username': row['username'],
+            'first_seen_at': row['first_seen_at'],
+            'last_seen_at': row['last_seen_at'],
+            'memory_enabled': bool(row['memory_enabled']),
+            'auto_reply_enabled': bool(row['auto_reply_enabled']),
+            'message_count': row['message_count']
+            if 'message_count' in row.keys()
+            else None,
+        }
+
+    @staticmethod
+    def _row_to_trace(row: aiosqlite.Row) -> dict[str, Any]:
+        try:
+            payload = json.loads(row['payload_json'])
+        except Exception:
+            payload = {}
+        return {
+            'id': row['id'],
+            'trace_id': row['trace_id'],
+            'chat_id': row['chat_id'],
+            'trigger_message_id': row['trigger_message_id'],
+            'source': row['source'],
+            'event_type': row['event_type'],
+            'payload': payload,
+            'created_at': row['created_at'],
         }

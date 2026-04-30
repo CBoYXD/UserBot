@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import time
+import uuid
 from html import escape
 from typing import Any
 
@@ -9,6 +10,7 @@ from redis.asyncio import Redis
 
 from src.config import AgenticSettings, OllamaSettings
 from src.services.agentic.storage import AgenticStorage
+from src.services.agentic.tools import build_readonly_tools
 from src.services.ollama import OllamaClient
 
 
@@ -126,14 +128,12 @@ class AgenticRuntime:
         return await self.ollama_health()
 
     async def push_recent(self, item: dict[str, Any]) -> None:
-        text = item.get('normalized_text') or ''
-        if not text:
+        if not item.get('normalized_text'):
             return
         key = RECENT_KEY.format(chat_id=item['chat_id'])
         payload = {
             'message_id': item['message_id'],
-            'sender': item.get('sender_name') or 'Unknown',
-            'text': text,
+            'sender_user_id': item.get('sender_user_id'),
             'ts': item.get('date_ts'),
         }
         await self.redis.lpush(
@@ -165,19 +165,9 @@ class AgenticRuntime:
         query: str,
         recent_limit: int = 30,
     ) -> str:
-        recent = await self.recent_from_cache(chat_id, recent_limit)
-        if not recent:
-            stored = await self.storage.recent_messages(
-                chat_id, recent_limit
-            )
-            recent = [
-                {
-                    'message_id': item['message_id'],
-                    'sender': item['sender'],
-                    'text': item['normalized_text'],
-                }
-                for item in stored
-            ]
+        recent = await self.storage.recent_messages(
+            chat_id, recent_limit
+        )
         matches = await self.storage.search_messages(
             query,
             chat_id=chat_id,
@@ -188,7 +178,7 @@ class AgenticRuntime:
             lines.append('Recent chat messages:')
             for item in recent[-recent_limit:]:
                 sender = item.get('sender') or 'Unknown'
-                text = item.get('text') or ''
+                text = item.get('normalized_text') or ''
                 lines.append(f'- {sender}: {text}')
         if matches:
             lines.append('')
@@ -198,6 +188,160 @@ class AgenticRuntime:
                 sender = item.get('sender') or 'Unknown'
                 lines.append(f'- {sender}: {text}')
         return '\n'.join(lines)
+
+    async def run_readonly_tool_loop(
+        self,
+        *,
+        chat_id: int,
+        prompt: str,
+        system: str,
+        allow_global: bool,
+        source: str = 'agent',
+        trigger_message_id: int | None = None,
+        max_steps: int | None = None,
+    ) -> str:
+        ok, reason = await self.require_ollama()
+        if not ok:
+            raise RuntimeError(f'Local Ollama unavailable: {reason}')
+
+        tools, dispatch = build_readonly_tools(
+            self,
+            current_chat_id=chat_id,
+            allow_global=allow_global,
+        )
+        messages: list[dict[str, Any]] = [
+            {'role': 'user', 'content': prompt}
+        ]
+        steps = max_steps or self.settings.max_agent_steps
+        last_content = ''
+        trace_id = uuid.uuid4().hex[:12]
+        await self.storage.log_trace(
+            trace_id=trace_id,
+            chat_id=chat_id,
+            trigger_message_id=trigger_message_id,
+            source=source,
+            event_type='loop_start',
+            payload={
+                'allow_global': allow_global,
+                'max_steps': steps,
+                'prompt': _preview(prompt, 1200),
+            },
+        )
+        for _ in range(max(1, steps)):
+            step = (
+                len(
+                    [
+                        item
+                        for item in messages
+                        if item.get('role') == 'assistant'
+                    ]
+                )
+                + 1
+            )
+            try:
+                result = await self.ollama.chat(
+                    messages,
+                    model=await self.chat_model(),
+                    system=system,
+                    tools=tools,
+                )
+            except Exception as e:
+                await self.storage.log_trace(
+                    trace_id=trace_id,
+                    chat_id=chat_id,
+                    trigger_message_id=trigger_message_id,
+                    source=source,
+                    event_type='model_error',
+                    payload={'step': step, 'error': str(e)},
+                )
+                raise
+            message = result.raw.get('message') or {}
+            if result.content:
+                last_content = result.content
+            tool_calls = message.get('tool_calls') or []
+            await self.storage.log_trace(
+                trace_id=trace_id,
+                chat_id=chat_id,
+                trigger_message_id=trigger_message_id,
+                source=source,
+                event_type='model_response',
+                payload={
+                    'step': step,
+                    'content': _preview(result.content, 1200),
+                    'tool_calls': [
+                        _tool_call_summary(call)
+                        for call in tool_calls
+                    ],
+                },
+            )
+            if not tool_calls:
+                if result.content:
+                    await self.storage.log_trace(
+                        trace_id=trace_id,
+                        chat_id=chat_id,
+                        trigger_message_id=trigger_message_id,
+                        source=source,
+                        event_type='loop_done',
+                        payload={
+                            'step': step,
+                            'answer': _preview(result.content, 1200),
+                        },
+                    )
+                    return result.content
+                break
+
+            messages.append(_assistant_message(message))
+            for call in tool_calls:
+                name, args = _tool_call_parts(call)
+                try:
+                    output = await dispatch(name, args)
+                    ok_result = True
+                except Exception as e:
+                    output = f'error: {e}'
+                    ok_result = False
+                await self.storage.log_trace(
+                    trace_id=trace_id,
+                    chat_id=chat_id,
+                    trigger_message_id=trigger_message_id,
+                    source=source,
+                    event_type='tool_result',
+                    payload={
+                        'step': step,
+                        'tool': name,
+                        'args': args,
+                        'ok': ok_result,
+                        'result': _preview(output, 2000),
+                    },
+                )
+                messages.append(
+                    {
+                        'role': 'tool',
+                        'tool_name': name,
+                        'content': output,
+                    }
+                )
+
+        if last_content:
+            await self.storage.log_trace(
+                trace_id=trace_id,
+                chat_id=chat_id,
+                trigger_message_id=trigger_message_id,
+                source=source,
+                event_type='loop_done',
+                payload={'answer': _preview(last_content, 1200)},
+            )
+            return last_content
+        await self.storage.log_trace(
+            trace_id=trace_id,
+            chat_id=chat_id,
+            trigger_message_id=trigger_message_id,
+            source=source,
+            event_type='loop_error',
+            payload={'error': 'no answer'},
+        )
+        raise RuntimeError(
+            'Local Ollama tool loop returned no answer'
+        )
 
     @staticmethod
     def format_search_results(items: list[dict[str, Any]]) -> str:
@@ -212,3 +356,39 @@ class AgenticRuntime:
                 f'<code>{mid}</code> <b>{sender}:</b> {text}'
             )
         return '\n'.join(lines)
+
+
+def _assistant_message(message: dict[str, Any]) -> dict[str, Any]:
+    return {
+        'role': 'assistant',
+        'content': str(message.get('content') or ''),
+        'tool_calls': message.get('tool_calls') or [],
+    }
+
+
+def _tool_call_parts(
+    call: dict[str, Any],
+) -> tuple[str, dict[str, Any]]:
+    function = call.get('function') or {}
+    name = str(function.get('name') or '')
+    args = function.get('arguments') or {}
+    if isinstance(args, str):
+        try:
+            args = json.loads(args)
+        except json.JSONDecodeError:
+            args = {}
+    if not isinstance(args, dict):
+        args = {}
+    return name, args
+
+
+def _tool_call_summary(call: dict[str, Any]) -> dict[str, Any]:
+    name, args = _tool_call_parts(call)
+    return {'tool': name, 'args': args}
+
+
+def _preview(value: Any, limit: int) -> str:
+    text = str(value or '')
+    if len(text) <= limit:
+        return text
+    return text[: limit - 3] + '...'
