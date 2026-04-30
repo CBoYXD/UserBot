@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-import asyncio
 import json
 import re
-import sqlite3
 import time
+from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any
+from typing import Any, AsyncIterator
+
+import aiosqlite
 
 
 TOKEN_RE = re.compile(r'[\w\-]{2,}', re.UNICODE)
@@ -17,70 +18,8 @@ class AgenticStorage:
         self.path = Path(db_path)
 
     async def init(self) -> None:
-        await asyncio.to_thread(self._init_sync)
-
-    async def upsert_message(self, item: dict[str, Any]) -> None:
-        await asyncio.to_thread(self._upsert_message_sync, item)
-
-    async def mark_deleted(
-        self, chat_id: int, message_ids: list[int]
-    ) -> int:
-        return await asyncio.to_thread(
-            self._mark_deleted_sync, chat_id, message_ids
-        )
-
-    async def recent_messages(
-        self, chat_id: int, limit: int = 40
-    ) -> list[dict[str, Any]]:
-        return await asyncio.to_thread(
-            self._recent_messages_sync, chat_id, limit
-        )
-
-    async def search_messages(
-        self,
-        query: str,
-        *,
-        chat_id: int | None = None,
-        limit: int = 12,
-    ) -> list[dict[str, Any]]:
-        return await asyncio.to_thread(
-            self._search_messages_sync, query, chat_id, limit
-        )
-
-    async def stats(self) -> dict[str, int]:
-        return await asyncio.to_thread(self._stats_sync)
-
-    async def log_action(
-        self,
-        *,
-        chat_id: int,
-        trigger_message_id: int | None,
-        action_type: str,
-        decision: dict[str, Any],
-        result: dict[str, Any],
-        status: str,
-    ) -> None:
-        await asyncio.to_thread(
-            self._log_action_sync,
-            chat_id,
-            trigger_message_id,
-            action_type,
-            decision,
-            result,
-            status,
-        )
-
-    def _connect(self) -> sqlite3.Connection:
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        conn = sqlite3.connect(str(self.path))
-        conn.row_factory = sqlite3.Row
-        conn.execute('pragma journal_mode=wal')
-        conn.execute('pragma foreign_keys=on')
-        return conn
-
-    def _init_sync(self) -> None:
-        with self._connect() as conn:
-            conn.executescript(
+        async with self._connect() as db:
+            await db.executescript(
                 """
                 create table if not exists chats (
                     chat_id integer primary key,
@@ -170,14 +109,15 @@ class AgenticStorage:
                 );
                 """
             )
+            await db.commit()
 
-    def _upsert_message_sync(self, item: dict[str, Any]) -> None:
+    async def upsert_message(self, item: dict[str, Any]) -> None:
         now = int(time.time())
         chat_id = int(item['chat_id'])
         message_id = int(item['message_id'])
         text = item.get('normalized_text') or ''
-        with self._connect() as conn:
-            conn.execute(
+        async with self._connect() as db:
+            await db.execute(
                 """
                 insert into chats (
                     chat_id, type, title, username,
@@ -201,7 +141,7 @@ class AgenticStorage:
             )
             user_id = item.get('sender_user_id')
             if user_id is not None:
-                conn.execute(
+                await db.execute(
                     """
                     insert into users (
                         user_id, is_self, is_bot, username,
@@ -228,7 +168,7 @@ class AgenticStorage:
                         now,
                     ),
                 )
-            conn.execute(
+            await db.execute(
                 """
                 insert into messages (
                     chat_id, message_id, sender_user_id,
@@ -270,7 +210,7 @@ class AgenticStorage:
                     ),
                 ),
             )
-            conn.execute(
+            await db.execute(
                 """
                 delete from message_fts
                 where chat_id = ? and message_id = ?
@@ -278,7 +218,7 @@ class AgenticStorage:
                 (chat_id, message_id),
             )
             if text:
-                conn.execute(
+                await db.execute(
                     """
                     insert into message_fts (
                         chat_id, message_id, normalized_text
@@ -287,17 +227,18 @@ class AgenticStorage:
                     """,
                     (chat_id, message_id, text),
                 )
+            await db.commit()
 
-    def _mark_deleted_sync(
+    async def mark_deleted(
         self, chat_id: int, message_ids: list[int]
     ) -> int:
         if not message_ids:
             return 0
         now = int(time.time())
-        with self._connect() as conn:
+        async with self._connect() as db:
             count = 0
             for mid in message_ids:
-                cursor = conn.execute(
+                cursor = await db.execute(
                     """
                     update messages
                     set deleted_at = ?
@@ -305,7 +246,7 @@ class AgenticStorage:
                     """,
                     (now, chat_id, int(mid)),
                 )
-                conn.execute(
+                await db.execute(
                     """
                     delete from message_fts
                     where chat_id = ? and message_id = ?
@@ -313,13 +254,14 @@ class AgenticStorage:
                     (chat_id, int(mid)),
                 )
                 count += cursor.rowcount
+            await db.commit()
             return count
 
-    def _recent_messages_sync(
-        self, chat_id: int, limit: int
+    async def recent_messages(
+        self, chat_id: int, limit: int = 40
     ) -> list[dict[str, Any]]:
-        with self._connect() as conn:
-            rows = conn.execute(
+        async with self._connect() as db:
+            cursor = await db.execute(
                 """
                 select m.*, u.first_name, u.last_name, u.username
                 from messages m
@@ -329,13 +271,18 @@ class AgenticStorage:
                 limit ?
                 """,
                 (int(chat_id), int(limit)),
-            ).fetchall()
+            )
+            rows = await cursor.fetchall()
         items = [self._row_to_message(row) for row in rows]
         items.reverse()
         return items
 
-    def _search_messages_sync(
-        self, query: str, chat_id: int | None, limit: int
+    async def search_messages(
+        self,
+        query: str,
+        *,
+        chat_id: int | None = None,
+        limit: int = 12,
     ) -> list[dict[str, Any]]:
         match = self._fts_query(query)
         if not match:
@@ -358,37 +305,37 @@ class AgenticStorage:
             order by rank asc, m.message_id desc
             limit ?
         """
-        with self._connect() as conn:
-            rows = conn.execute(sql, params).fetchall()
+        async with self._connect() as db:
+            cursor = await db.execute(sql, params)
+            rows = await cursor.fetchall()
         return [self._row_to_message(row) for row in rows]
 
-    def _stats_sync(self) -> dict[str, int]:
-        with self._connect() as conn:
-            chats = conn.execute(
-                'select count(*) from chats'
-            ).fetchone()[0]
-            users = conn.execute(
-                'select count(*) from users'
-            ).fetchone()[0]
-            messages = conn.execute(
-                'select count(*) from messages where deleted_at is null'
-            ).fetchone()[0]
-            deleted = conn.execute(
-                'select count(*) from messages where deleted_at is not null'
-            ).fetchone()[0]
-            actions = conn.execute(
-                'select count(*) from agent_actions'
-            ).fetchone()[0]
+    async def stats(self) -> dict[str, int]:
+        async with self._connect() as db:
+            chats = await self._count(db, 'chats')
+            users = await self._count(db, 'users')
+            messages = await self._count(
+                db,
+                'messages',
+                'deleted_at is null',
+            )
+            deleted = await self._count(
+                db,
+                'messages',
+                'deleted_at is not null',
+            )
+            actions = await self._count(db, 'agent_actions')
         return {
-            'chats': int(chats),
-            'users': int(users),
-            'messages': int(messages),
-            'deleted': int(deleted),
-            'actions': int(actions),
+            'chats': chats,
+            'users': users,
+            'messages': messages,
+            'deleted': deleted,
+            'actions': actions,
         }
 
-    def _log_action_sync(
+    async def log_action(
         self,
+        *,
         chat_id: int,
         trigger_message_id: int | None,
         action_type: str,
@@ -396,8 +343,8 @@ class AgenticStorage:
         result: dict[str, Any],
         status: str,
     ) -> None:
-        with self._connect() as conn:
-            conn.execute(
+        async with self._connect() as db:
+            await db.execute(
                 """
                 insert into agent_actions (
                     chat_id, trigger_message_id, action_type,
@@ -415,6 +362,31 @@ class AgenticStorage:
                     int(time.time()),
                 ),
             )
+            await db.commit()
+
+    @asynccontextmanager
+    async def _connect(
+        self,
+    ) -> AsyncIterator[aiosqlite.Connection]:
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        async with aiosqlite.connect(str(self.path)) as db:
+            db.row_factory = aiosqlite.Row
+            await db.execute('pragma journal_mode=wal')
+            await db.execute('pragma foreign_keys=on')
+            yield db
+
+    @staticmethod
+    async def _count(
+        db: aiosqlite.Connection,
+        table: str,
+        where: str | None = None,
+    ) -> int:
+        sql = f'select count(*) from {table}'
+        if where is not None:
+            sql += f' where {where}'
+        cursor = await db.execute(sql)
+        row = await cursor.fetchone()
+        return int(row[0])
 
     @staticmethod
     def _fts_query(query: str) -> str:
@@ -423,7 +395,7 @@ class AgenticStorage:
         return ' OR '.join(f'"{term}"' for term in terms)
 
     @staticmethod
-    def _row_to_message(row: sqlite3.Row) -> dict[str, Any]:
+    def _row_to_message(row: aiosqlite.Row) -> dict[str, Any]:
         sender = 'Unknown'
         first = row['first_name']
         last = row['last_name']
