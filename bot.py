@@ -12,10 +12,13 @@ from src.config import (
     RuntimeSettings,
     get_redis_engine,
 )
-from src.bot.tools.dispatcher import Dispatcher
+from src.core.dispatcher import Dispatcher
 from src.services.code_pars.piston import PistonClient
 from src.services.codex import CodexClient
-from src.bot.modules import routers
+from src.services.crypto import CryptoService
+from src.services.quote import QuoteService
+from src.services.weather import WeatherService
+from src.bot import routers
 
 
 ROOT_DIR = Path(__file__).resolve().parent
@@ -58,6 +61,9 @@ def build_runtime(config: Config):
         redis=redis,
         piston=PistonClient(),
         codex=codex,
+        weather=WeatherService(),
+        crypto=CryptoService(),
+        quote=QuoteService(),
     )
     return client, redis, dispatcher
 

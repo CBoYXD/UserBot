@@ -1,0 +1,18 @@
+COMMON_COINS = {
+    'btc': 'bitcoin',
+    'eth': 'ethereum',
+    'sol': 'solana',
+    'bnb': 'binancecoin',
+    'ada': 'cardano',
+    'xrp': 'ripple',
+    'doge': 'dogecoin',
+    'ton': 'the-open-network',
+    'matic': 'polygon-ecosystem-token',
+    'dot': 'polkadot',
+    'avax': 'avalanche-2',
+    'ltc': 'litecoin',
+    'trx': 'tron',
+    'link': 'chainlink',
+    'usdt': 'tether',
+    'usdc': 'usd-coin',
+}

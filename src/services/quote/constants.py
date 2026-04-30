@@ -1,0 +1,18 @@
+CARD_W = 720
+PAD = 24
+AVATAR = 96
+NAME_SIZE = 28
+TEXT_SIZE = 26
+
+BG = (24, 26, 32)
+PANEL = (35, 39, 48)
+NAME_COLOR = (110, 200, 255)
+TEXT_COLOR = (230, 232, 236)
+
+FONT_CANDIDATES = [
+    '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+    '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
+    '/Library/Fonts/Arial.ttf',
+    'C:/Windows/Fonts/segoeui.ttf',
+    'C:/Windows/Fonts/arial.ttf',
+]
