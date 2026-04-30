@@ -220,6 +220,7 @@ class CodexClient:
         extra_input: list[dict[str, Any]] = []
         last_text = ''
         last_response: dict[str, Any] | None = None
+        tools_executed = False
         for _ in range(max_steps):
             text, response = await self._run_stream(
                 messages=messages,
@@ -238,6 +239,8 @@ class CodexClient:
             if not calls:
                 if last_text:
                     return last_text
+                if tools_executed:
+                    return ''
                 debug = _summarize_output(response)
                 raise RuntimeError(
                     f'Codex returned an empty response ({debug})'
@@ -246,6 +249,7 @@ class CodexClient:
             for item in _passthrough_items(response):
                 extra_input.append(item)
 
+            tools_executed = True
             for call in calls:
                 try:
                     args = (

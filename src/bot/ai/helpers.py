@@ -46,12 +46,13 @@ def build_ai_response(
     prompt: str,
     response: str,
 ) -> tuple[str, str]:
+    body = response or '(no text reply)'
     html_text = (
         f'<b>{escape(prompt_title)}:</b> {escape(prompt)}\n\n'
-        f'<b>AI:</b>\n{escape(response)}'
+        f'<b>AI:</b>\n{escape(body)}'
     )
     plain_text = (
         f'{prompt_title}:\n{prompt}\n\n'
-        f'AI:\n{response}'
+        f'AI:\n{body}'
     )
     return html_text, plain_text
