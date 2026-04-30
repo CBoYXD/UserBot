@@ -1,23 +1,19 @@
 import io
 from html import escape
 
-from pyrogram import Client, filters
+from pyrogram import Client
 from pyrogram.enums import ParseMode
 from pyrogram.types import Message, ReplyParameters
 
+from src.core.acl import cmd
 from src.core.router import Router
 from src.services.quote import QuoteService
 
 
 quote_router = Router('quote')
-quote_router.router_filters = filters.me
 
 
-@quote_router.message(
-    filters.command(
-        ['q', 'quote', 'ц', 'цитата'], prefixes='.'
-    )
-)
+@quote_router.message(cmd('quote', 'q', 'quote', 'ц', 'цитата'))
 async def quote_cmd(
     msg: Message, client: Client, quote: QuoteService
 ):

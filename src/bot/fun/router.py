@@ -1,20 +1,16 @@
 from asyncio import sleep
 
-from pyrogram import filters
 from pyrogram.errors import FloodWait
 from pyrogram.types import Message
 
+from src.core.acl import cmd
 from src.core.router import Router
 
 
 fun_router = Router('fun')
-fun_router.router_filters = filters.me
 
 
-@fun_router.message(
-    filters.command('тайп', prefixes='.')
-    | filters.command('type', prefixes='.')
-)
+@fun_router.message(cmd('fun', 'type', 'тайп'))
 async def type_fun(msg: Message):
     orig_text = (
         msg.text.split(
@@ -40,10 +36,7 @@ async def type_fun(msg: Message):
             await sleep(e.value)
 
 
-@fun_router.message(
-    filters.command('спам', prefixes='.')
-    | filters.command('spam', prefixes='.')
-)
+@fun_router.message(cmd('fun', 'spam', 'спам'))
 async def spam_fun(msg: Message):
     if not bool(msg.reply_to_message):
         await msg.edit('Треба відповіддю на повідомлення')

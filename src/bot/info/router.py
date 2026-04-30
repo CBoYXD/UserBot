@@ -1,18 +1,17 @@
 from html import escape
 
-from pyrogram import filters
 from pyrogram.enums import ParseMode
 from pyrogram.types import Message
 
 from src.bot import utils
 from src.bot.info.help import build_info_html, build_info_text
+from src.core.acl import cmd
 from src.core.router import Router
 from src.services.crypto import CryptoService
 from src.services.weather import WeatherService
 
 
 info_router = Router('info')
-info_router.router_filters = filters.me
 
 
 def _extract_arg(msg: Message) -> str:
@@ -22,9 +21,7 @@ def _extract_arg(msg: Message) -> str:
 
 
 @info_router.message(
-    filters.command(
-        ['info', 'help', 'команди', 'допомога'], prefixes='.'
-    )
+    cmd('info', 'info', 'help', 'команди', 'допомога')
 )
 async def info_cmd(msg: Message):
     await utils.edit_or_send_as_text_file(
@@ -35,9 +32,7 @@ async def info_cmd(msg: Message):
     )
 
 
-@info_router.message(
-    filters.command(['weather', 'погода'], prefixes='.')
-)
+@info_router.message(cmd('info', 'weather', 'погода'))
 async def weather_cmd(msg: Message, weather: WeatherService):
     city = _extract_arg(msg)
     if not city:
@@ -82,9 +77,7 @@ async def weather_cmd(msg: Message, weather: WeatherService):
 
 
 @info_router.message(
-    filters.command(
-        ['crypto', 'price', 'крипто', 'ціна'], prefixes='.'
-    )
+    cmd('info', 'crypto', 'price', 'крипто', 'ціна')
 )
 async def crypto_cmd(msg: Message, crypto: CryptoService):
     arg = _extract_arg(msg)

@@ -3,11 +3,11 @@ import sys
 from time import process_time
 
 from meval import meval
-from pyrogram import filters
 from pyrogram.enums import ParseMode
 from pyrogram.types import Message
 from redis.asyncio import Redis
 
+from src.core.acl import cmd
 from src.core.router import Router
 from src.services.code_pars.piston import PistonClient
 from src.bot import utils
@@ -22,14 +22,11 @@ from src.bot.interpreters.parsing import (
 
 
 intrp_router = Router('intrp')
-intrp_router.router_filters = filters.me
 
 
 # ---------- .run ----------
 
-@intrp_router.message(
-    filters.command(['run', 'запуск'], prefixes='.')
-)
+@intrp_router.message(cmd('interpreters', 'run', 'запуск'))
 async def exec_code(
     msg: Message,
     piston: PistonClient,
@@ -71,7 +68,7 @@ async def exec_code(
 
 # ---------- .py ----------
 
-@intrp_router.message(filters.command('py', prefixes='.'))
+@intrp_router.message(cmd('interpreters', 'py'))
 async def exec_python_code(msg: Message):
     try:
         code = extract_python_code(msg)
@@ -131,9 +128,7 @@ def _code_help_text() -> str:
     )
 
 
-@intrp_router.message(
-    filters.command(['code', 'код'], prefixes='.')
-)
+@intrp_router.message(cmd('interpreters', 'code', 'код'))
 async def code_command(
     msg: Message,
     piston: PistonClient,

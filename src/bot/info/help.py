@@ -109,6 +109,23 @@ COMMAND_SECTIONS: list[tuple[str, list[tuple[str, str]]]] = [
             ),
         ],
     ),
+    (
+        '🔐 Permissions',
+        [
+            (
+                '.allow <user> <module|cmd|*>',
+                'Grant a scope to another user.',
+            ),
+            (
+                '.disallow <user> [scope]',
+                'Revoke one scope or all grants.',
+            ),
+            (
+                '.allowed [user]',
+                'List grants for a user or everyone.',
+            ),
+        ],
+    ),
 ]
 
 
