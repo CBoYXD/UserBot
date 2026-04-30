@@ -131,6 +131,7 @@ def process_sse_event(
     event_lines: list[str],
     text_parts: list[str],
     final_response: dict[str, Any] | None,
+    streamed_items: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any] | None:
     if not event_lines:
         return final_response
@@ -158,6 +159,14 @@ def process_sse_event(
         if isinstance(delta, str):
             text_parts.append(delta)
         return final_response
+    if (
+        event_type == 'response.output_item.done'
+        and streamed_items is not None
+    ):
+        item = event.get('item')
+        if isinstance(item, dict):
+            streamed_items.append(item)
+        return final_response
     if event_type in {
         'response.completed',
         'response.done',
@@ -177,6 +186,7 @@ async def stream_response(
 ) -> tuple[str, dict[str, Any] | None]:
     headers = build_headers(credentials, session_id)
     text_parts: list[str] = []
+    streamed_items: list[dict[str, Any]] = []
     final_response: dict[str, Any] | None = None
     async with http.stream(
         'POST',
@@ -202,6 +212,7 @@ async def stream_response(
                     event_lines,
                     text_parts,
                     final_response,
+                    streamed_items,
                 )
                 event_lines = []
                 continue
@@ -213,7 +224,22 @@ async def stream_response(
                 event_lines,
                 text_parts,
                 final_response,
+                streamed_items,
             )
+
+    if final_response is None and streamed_items:
+        final_response = {
+            'status': 'completed',
+            'output': list(streamed_items),
+        }
+    elif final_response is not None:
+        existing = final_response.get('output')
+        if not isinstance(existing, list) or not existing:
+            if streamed_items:
+                final_response = {
+                    **final_response,
+                    'output': list(streamed_items),
+                }
 
     text = ''.join(text_parts).strip()
     if not text and final_response:
