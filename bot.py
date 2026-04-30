@@ -63,6 +63,7 @@ def build_runtime(config: Config):
 
 
 async def _run_async(client: Client, redis, dispatcher: Dispatcher) -> None:
+    client.loop = asyncio.get_running_loop()
     dispatcher.update_runtime_settings()
     dispatcher.register_routers()
     await client.start()
