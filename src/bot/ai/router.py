@@ -8,7 +8,11 @@ from redis.asyncio import Redis
 from src.core.acl import cmd
 from src.core.router import Router
 from src.bot import utils
-from src.bot.ai.helpers import build_ai_response, extract_prompt
+from src.bot.ai.helpers import (
+    build_ai_response,
+    extract_display_prompt,
+    extract_prompt,
+)
 from src.bot.ai.prefs import (
     AI_EFFORT_KEY,
     AI_MODEL_KEY,
@@ -65,7 +69,7 @@ async def ai_ask(
         )
         text, file_text = build_ai_response(
             prompt_title='Q',
-            prompt=prompt,
+            prompt=extract_display_prompt(msg),
             response=response,
         )
         await utils.edit_or_send_as_text_file(
@@ -124,7 +128,7 @@ async def ai_chat(
         history.append({'role': 'assistant', 'text': response})
         text, file_text = build_ai_response(
             prompt_title='You',
-            prompt=prompt,
+            prompt=extract_display_prompt(msg),
             response=response,
         )
         await utils.edit_or_send_as_text_file(
