@@ -20,15 +20,12 @@ dependencies = [
     "pillow>=10.2.0",
 ]
 
-[project.scripts]
-userbot = "manage:main"
-
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [tool.uv]
-package = true
+package = false
 
 [tool.setuptools]
 py-modules = ["bot", "manage"]
