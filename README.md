@@ -116,7 +116,7 @@ answers are written to local SQLite trace events.
 8) List snippets with `.code ls`
 9) Delete snippets with `.code rm <name>`
 
-Notes and code snippets are stored locally in SQLite at
+ACL grants, notes, and code snippets are stored locally in SQLite at
 `data/userbot.sqlite3`, not in Redis.
 
 ### 7. Enjoy using the userbot
