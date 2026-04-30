@@ -7,7 +7,7 @@ from pyrogram.enums import ParseMode
 from pyrogram.types import Message
 from redis.asyncio import Redis
 
-from src.core.acl import cmd
+from src.services.acl import cmd
 from src.core.router import Router
 from src.services.code_pars.piston import PistonClient
 from src.bot import utils

@@ -33,7 +33,8 @@ class AgenticStorage:
         session_factory: async_sessionmaker[AsyncSession],
     ) -> None:
         self._engine = engine
-        self._sf = session_factory
+        self.session_factory = session_factory
+
 
     # ── schema bootstrap ────────────────────────────────────────────
 
@@ -43,7 +44,7 @@ class AgenticStorage:
         fresh installs that skip the migration step."""
         from src.db.base import Base
 
-        async with self._sf() as session:
+        async with self.session_factory() as session:
             await session.execute(
                 text(
                     """
@@ -72,7 +73,7 @@ class AgenticStorage:
             item.get('raw') or {}, ensure_ascii=False
         )
 
-        async with self._sf() as session:
+        async with self.session_factory() as session:
             async with session.begin():
                 await session.execute(
                     sqlite_insert(Chat)
@@ -213,7 +214,7 @@ class AgenticStorage:
             return 0
         now = int(time.time())
         count = 0
-        async with self._sf() as session:
+        async with self.session_factory() as session:
             async with session.begin():
                 for mid in message_ids:
                     res = await session.execute(
@@ -246,7 +247,7 @@ class AgenticStorage:
         confidence: float,
     ) -> None:
         now = int(time.time())
-        async with self._sf() as session:
+        async with self.session_factory() as session:
             async with session.begin():
                 await session.execute(
                     sqlite_insert(MemoryFact)
@@ -276,7 +277,7 @@ class AgenticStorage:
     async def get_facts(
         self, scope_type: str, scope_id: str
     ) -> list[dict[str, Any]]:
-        async with self._sf() as session:
+        async with self.session_factory() as session:
             rows = (
                 await session.execute(
                     select(MemoryFact)
@@ -292,7 +293,7 @@ class AgenticStorage:
     async def update_profile_summary(
         self, user_id: int, summary: str
     ) -> None:
-        async with self._sf() as session:
+        async with self.session_factory() as session:
             async with session.begin():
                 await session.execute(
                     update(User)
@@ -303,7 +304,7 @@ class AgenticStorage:
     async def get_user(
         self, user_id: int
     ) -> dict[str, Any] | None:
-        async with self._sf() as session:
+        async with self.session_factory() as session:
             row = (
                 await session.execute(
                     select(User).where(User.user_id == user_id)
@@ -314,7 +315,7 @@ class AgenticStorage:
     async def pending_for_extraction(
         self, limit: int = 50
     ) -> list[dict[str, Any]]:
-        async with self._sf() as session:
+        async with self.session_factory() as session:
             rows = (
                 await session.execute(
                     select(Message, User.first_name, User.last_name, User.username)
@@ -344,7 +345,7 @@ class AgenticStorage:
     ) -> None:
         if not ids:
             return
-        async with self._sf() as session:
+        async with self.session_factory() as session:
             async with session.begin():
                 for chat_id, message_id in ids:
                     await session.execute(
@@ -359,7 +360,7 @@ class AgenticStorage:
     async def users_with_new_facts(
         self, since_ts: int
     ) -> list[int]:
-        async with self._sf() as session:
+        async with self.session_factory() as session:
             rows = (
                 await session.execute(
                     select(MemoryFact.scope_id)
@@ -377,7 +378,7 @@ class AgenticStorage:
     async def recent_messages(
         self, chat_id: int, limit: int = 40
     ) -> list[dict[str, Any]]:
-        async with self._sf() as session:
+        async with self.session_factory() as session:
             rows = (
                 await session.execute(
                     select(
@@ -408,7 +409,7 @@ class AgenticStorage:
     async def get_message(
         self, chat_id: int, message_id: int
     ) -> dict[str, Any] | None:
-        async with self._sf() as session:
+        async with self.session_factory() as session:
             row = (
                 await session.execute(
                     select(
@@ -459,7 +460,7 @@ class AgenticStorage:
                 Message.deleted_at.is_(None),
             )
         )
-        async with self._sf() as session:
+        async with self.session_factory() as session:
             before_rows = (
                 await session.execute(
                     base.where(Message.message_id < message_id)
@@ -521,7 +522,7 @@ class AgenticStorage:
         stmt = (
             stmt.order_by(Message.message_id.desc()).limit(limit)
         )
-        async with self._sf() as session:
+        async with self.session_factory() as session:
             rows = (await session.execute(stmt)).all()
         items = [
             _message_row_to_dict(msg, fn, ln, un)
@@ -570,7 +571,7 @@ class AgenticStorage:
             LIMIT :limit
             """
         )
-        async with self._sf() as session:
+        async with self.session_factory() as session:
             rows = (await session.execute(sql, params)).all()
         return [_fts_row_to_dict(r) for r in rows]
 
@@ -600,7 +601,7 @@ class AgenticStorage:
         stmt = stmt.order_by(Chat.last_seen_at.desc()).limit(
             limit
         )
-        async with self._sf() as session:
+        async with self.session_factory() as session:
             rows = (await session.execute(stmt)).all()
         return [
             _chat_to_dict(chat, mc) for chat, mc in rows
@@ -609,7 +610,7 @@ class AgenticStorage:
     async def chat_stats(
         self, chat_id: int
     ) -> dict[str, Any]:
-        async with self._sf() as session:
+        async with self.session_factory() as session:
             chat = (
                 await session.execute(
                     select(Chat).where(
@@ -658,7 +659,7 @@ class AgenticStorage:
         }
 
     async def stats(self) -> dict[str, int]:
-        async with self._sf() as session:
+        async with self.session_factory() as session:
             chats = (
                 await session.execute(select(func.count(Chat.chat_id)))
             ).scalar_one()
@@ -711,7 +712,7 @@ class AgenticStorage:
         status: str,
     ) -> None:
         now = int(time.time())
-        async with self._sf() as session:
+        async with self.session_factory() as session:
             async with session.begin():
                 session.add(
                     AgentAction(
@@ -740,7 +741,7 @@ class AgenticStorage:
         payload: dict[str, Any],
     ) -> None:
         now = int(time.time())
-        async with self._sf() as session:
+        async with self.session_factory() as session:
             async with session.begin():
                 session.add(
                     AgentTrace(
@@ -770,7 +771,7 @@ class AgenticStorage:
         elif chat_id is not None:
             stmt = stmt.where(AgentTrace.chat_id == chat_id)
         stmt = stmt.order_by(AgentTrace.id.desc()).limit(limit)
-        async with self._sf() as session:
+        async with self.session_factory() as session:
             rows = (await session.execute(stmt)).scalars().all()
         items = [_trace_to_dict(r) for r in rows]
         items.reverse()

@@ -5,7 +5,7 @@ from pyrogram import Client
 from pyrogram.enums import ParseMode
 from pyrogram.types import Message, ReplyParameters
 
-from src.core.acl import cmd
+from src.services.acl import cmd
 from src.core.router import Router
 from src.services.quote import QuoteService
 

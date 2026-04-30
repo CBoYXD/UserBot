@@ -12,7 +12,7 @@ from src.config import (
     RuntimeSettings,
     get_redis_engine,
 )
-from src.core.acl import init_acl
+from src.services.acl import init_acl
 from src.core.dispatcher import Dispatcher
 from src.services.code_pars.piston import PistonClient
 from src.services.agentic import AgenticRuntime
@@ -53,7 +53,6 @@ def create_client(config: Config) -> Client:
 
 def build_runtime(config: Config):
     redis = get_redis_engine(config.redis)
-    init_acl(redis)
     runtime_settings = RuntimeSettings(redis)
     codex = CodexClient(redis=redis)
     agentic = AgenticRuntime(
@@ -61,6 +60,7 @@ def build_runtime(config: Config):
         settings=config.agentic,
         ollama_settings=config.ollama,
     )
+    init_acl(redis, agentic.storage.session_factory)
     client = create_client(config)
     dispatcher = Dispatcher(
         client=client,

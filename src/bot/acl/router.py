@@ -5,7 +5,7 @@ from pyrogram.enums import ParseMode
 from pyrogram.types import Message
 from redis.asyncio import Redis
 
-from src.core.acl import registry, storage
+from src.services.acl import registry, storage
 from src.core.router import Router
 
 

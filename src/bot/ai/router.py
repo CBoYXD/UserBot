@@ -6,7 +6,7 @@ from pyrogram.enums import ParseMode
 from pyrogram.types import Message
 from redis.asyncio import Redis
 
-from src.core.acl import cmd
+from src.services.acl import cmd
 from src.core.router import Router
 from src.bot import utils
 from src.bot.ai.helpers import (

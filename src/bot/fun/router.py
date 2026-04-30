@@ -3,7 +3,7 @@ from asyncio import sleep
 from pyrogram.errors import FloodWait
 from pyrogram.types import Message
 
-from src.core.acl import cmd
+from src.services.acl import cmd
 from src.core.router import Router
 
 

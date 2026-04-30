@@ -1,17 +1,23 @@
+from __future__ import annotations
+
 from pyrogram import filters as pyrofilters
 from pyrogram.filters import Filter, create
 from redis.asyncio import Redis
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from src.core.acl import storage
+from src.services.acl import storage
 
 
 _redis: Redis | None = None
 
 
-def init_acl(redis: Redis) -> None:
-    """Bind the Redis client used by ACL filters at startup."""
+def init_acl(
+    redis: Redis,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
     global _redis
     _redis = redis
+    storage.init_storage(session_factory)
 
 
 def acl_filter(module: str, *commands: str) -> Filter:

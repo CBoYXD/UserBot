@@ -5,7 +5,7 @@ from pyrogram.types import Message
 
 from src.bot import utils
 from src.bot.info.help import build_info_html, build_info_text
-from src.core.acl import cmd
+from src.services.acl import cmd
 from src.core.router import Router
 from src.services.crypto import CryptoService
 from src.services.weather import WeatherService
