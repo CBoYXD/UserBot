@@ -15,6 +15,7 @@ from src.config import (
 from src.core.acl import init_acl
 from src.core.dispatcher import Dispatcher
 from src.services.code_pars.piston import PistonClient
+from src.services.agentic import AgenticRuntime
 from src.services.codex import CodexClient
 from src.services.crypto import CryptoService
 from src.services.mermaid import MermaidService
@@ -55,12 +56,18 @@ def build_runtime(config: Config):
     init_acl(redis)
     runtime_settings = RuntimeSettings(redis)
     codex = CodexClient(redis=redis)
+    agentic = AgenticRuntime(
+        redis=redis,
+        settings=config.agentic,
+        ollama_settings=config.ollama,
+    )
     client = create_client(config)
     dispatcher = Dispatcher(
         client=client,
         runtime_settings=runtime_settings,
         routers=routers,
         redis=redis,
+        agentic=agentic,
         piston=PistonClient(),
         codex=codex,
         weather=WeatherService(),
@@ -68,11 +75,17 @@ def build_runtime(config: Config):
         quote=QuoteService(),
         mermaid=MermaidService(),
     )
-    return client, redis, dispatcher
+    return client, redis, dispatcher, agentic
 
 
-async def _run_async(client: Client, redis, dispatcher: Dispatcher) -> None:
+async def _run_async(
+    client: Client,
+    redis,
+    dispatcher: Dispatcher,
+    agentic: AgenticRuntime,
+) -> None:
     client.loop = asyncio.get_running_loop()
+    await agentic.start()
     await dispatcher.runtime_settings.load()
     dispatcher.update_runtime_settings()
     dispatcher.register_routers()
@@ -81,13 +94,18 @@ async def _run_async(client: Client, redis, dispatcher: Dispatcher) -> None:
         await idle()
     finally:
         await client.stop()
+        await agentic.close()
         await redis.aclose()
         await _cancel_pending_tasks()
 
 
 async def _cancel_pending_tasks() -> None:
     current = asyncio.current_task()
-    pending = [t for t in asyncio.all_tasks() if t is not current and not t.done()]
+    pending = [
+        t
+        for t in asyncio.all_tasks()
+        if t is not current and not t.done()
+    ]
     for task in pending:
         task.cancel()
     if pending:
@@ -98,8 +116,8 @@ def run_bot() -> None:
     setup_logging()
     ensure_session_exists()
     config = get_config()
-    client, redis, dispatcher = build_runtime(config)
-    asyncio.run(_run_async(client, redis, dispatcher))
+    client, redis, dispatcher, agentic = build_runtime(config)
+    asyncio.run(_run_async(client, redis, dispatcher, agentic))
 
 
 def init_session() -> User:

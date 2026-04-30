@@ -3,6 +3,7 @@ from functools import lru_cache
 from logging import getLogger
 
 from pydantic import BaseModel
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from redis.asyncio import Redis
 
@@ -20,9 +21,30 @@ class RedisSettings(BaseModel):
     password: str
 
 
+class OllamaSettings(BaseModel):
+    base_url: str = 'http://127.0.0.1:11434'
+    chat_model: str = 'qwen3:8b'
+    embed_model: str = ''
+    timeout: float = 120.0
+    health_ttl: int = 20
+
+
+class AgenticSettings(BaseModel):
+    db_path: str = 'data/agentic.sqlite3'
+    max_agent_steps: int = 3
+    ingest_enabled: bool = True
+    auto_reply_default: bool = False
+    require_ollama: bool = True
+    embeddings_enabled: bool = False
+    recent_cache_size: int = 80
+    search_limit: int = 12
+
+
 class Config(BaseSettings):
     userbot: UserBotSettings
     redis: RedisSettings
+    ollama: OllamaSettings = Field(default_factory=OllamaSettings)
+    agentic: AgenticSettings = Field(default_factory=AgenticSettings)
     model_config = SettingsConfigDict(
         env_file='.env',
         env_file_encoding='utf-8',

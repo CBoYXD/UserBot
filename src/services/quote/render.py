@@ -13,7 +13,6 @@ from src.services.quote.constants import (
     NAME_COLORS_DARK,
     NAME_SIZE,
     RADIUS,
-    SCALE,
     STICKER_MAX,
     SUPERSAMPLE,
     TAIL_SIZE,
@@ -24,11 +23,7 @@ from src.services.quote.fonts import get_font
 
 
 def _name_color_for(user_id: int | None) -> tuple[int, int, int]:
-    idx = (
-        abs(user_id) % len(NAME_COLORS_DARK)
-        if user_id
-        else 0
-    )
+    idx = abs(user_id) % len(NAME_COLORS_DARK) if user_id else 0
     return NAME_COLORS_DARK[idx]
 
 
@@ -56,9 +51,7 @@ def _wrap(
     return out
 
 
-def _measure(
-    lines: list[str], font: ImageFont.FreeTypeFont
-) -> int:
+def _measure(lines: list[str], font: ImageFont.FreeTypeFont) -> int:
     w = 0
     for line in lines:
         bbox = font.getbbox(line)
@@ -95,9 +88,7 @@ def render_quote(
     canvas_w = avatar_block + bubble_w
     canvas_h = max(bubble_h, AVATAR_SIZE)
 
-    canvas = Image.new(
-        'RGBA', (canvas_w, canvas_h), (0, 0, 0, 0)
-    )
+    canvas = Image.new('RGBA', (canvas_w, canvas_h), (0, 0, 0, 0))
 
     bubble_img, tail_offset = draw_bubble(
         bubble_w,

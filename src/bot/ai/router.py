@@ -26,6 +26,7 @@ from src.bot.ai.prompts import (
     TRANSLATE_SYSTEM_PROMPT,
 )
 from src.bot.ai.tools import build_ai_tools
+from src.services.agentic import AgenticRuntime
 from src.services.codex import CodexClient
 from src.services.mermaid import MermaidService
 
@@ -43,9 +44,7 @@ async def _flush_images(
     images: list[tuple[bytes, str | None]],
 ) -> None:
     target_id = (
-        msg.reply_to_message.id
-        if msg.reply_to_message
-        else msg.id
+        msg.reply_to_message.id if msg.reply_to_message else msg.id
     )
     for png, caption in images:
         bio = io.BytesIO(png)
@@ -58,17 +57,171 @@ async def _flush_images(
         )
 
 
+def _ollama_messages(
+    messages: list[dict[str, str]],
+) -> list[dict[str, str]]:
+    return [
+        {
+            'role': item['role'],
+            'content': item.get('content') or item.get('text') or '',
+        }
+        for item in messages
+    ]
+
+
+async def _codex_available(codex: CodexClient) -> bool:
+    try:
+        status = await codex.get_auth_status()
+    except Exception:
+        return False
+    return bool(status.get('authenticated'))
+
+
+async def _ollama_generate(
+    agentic: AgenticRuntime,
+    *,
+    messages: list[dict[str, str]],
+    system_instruction: str | None,
+    model: str | None = None,
+) -> str:
+    if model is None:
+        ok, reason = await agentic.require_ollama()
+        model = await agentic.chat_model()
+    else:
+        ok, reason = await agentic.ollama.health(model)
+    if not ok:
+        raise RuntimeError(f'Local Ollama unavailable: {reason}')
+
+    result = await agentic.ollama.chat(
+        _ollama_messages(messages),
+        model=model,
+        system=system_instruction,
+    )
+    if not result.content:
+        raise RuntimeError('Local Ollama returned an empty response')
+    return result.content
+
+
+async def _chat_with_fallback(
+    *,
+    codex: CodexClient,
+    agentic: AgenticRuntime,
+    redis: Redis,
+    messages: list[dict[str, str]],
+    system_instruction: str | None,
+    session_id: str,
+    tools=None,
+    dispatch=None,
+) -> tuple[str, str]:
+    codex_error: Exception | None = None
+    if await _codex_available(codex):
+        try:
+            model, effort, _, _ = await get_ai_preferences(
+                redis, codex
+            )
+            if tools is not None and dispatch is not None:
+                response = await codex.chat_with_tools(
+                    messages=messages,
+                    tools=tools,
+                    dispatch=dispatch,
+                    system_instruction=system_instruction,
+                    session_id=session_id,
+                    model=model,
+                    reasoning_effort=effort,
+                )
+            else:
+                response = await codex.chat(
+                    messages=messages,
+                    system_instruction=system_instruction,
+                    session_id=session_id,
+                    model=model,
+                    reasoning_effort=effort,
+                )
+            return response, 'codex'
+        except Exception as e:
+            codex_error = e
+
+    try:
+        response = await _ollama_generate(
+            agentic,
+            messages=messages,
+            system_instruction=system_instruction,
+        )
+    except Exception as e:
+        if codex_error is not None:
+            raise RuntimeError(
+                f'Codex failed: {codex_error}; Ollama failed: {e}'
+            ) from e
+        raise
+    return response, 'ollama'
+
+
+async def _generate_with_fallback(
+    *,
+    codex: CodexClient,
+    agentic: AgenticRuntime,
+    redis: Redis,
+    prompt: str,
+    system_instruction: str | None,
+    session_id: str,
+    ollama_model: str | None = None,
+) -> tuple[str, str]:
+    messages = [{'role': 'user', 'text': prompt}]
+    codex_error: Exception | None = None
+    if await _codex_available(codex):
+        try:
+            model, effort, _, _ = await get_ai_preferences(
+                redis, codex
+            )
+            response = await codex.generate(
+                prompt=prompt,
+                system_instruction=system_instruction,
+                session_id=session_id,
+                model=model,
+                reasoning_effort=effort,
+            )
+            return response, 'codex'
+        except Exception as e:
+            codex_error = e
+
+    try:
+        response = await _ollama_generate(
+            agentic,
+            messages=messages,
+            system_instruction=system_instruction,
+            model=ollama_model,
+        )
+    except Exception as e:
+        if codex_error is not None:
+            raise RuntimeError(
+                f'Codex failed: {codex_error}; Ollama failed: {e}'
+            ) from e
+        raise
+    return response, 'ollama'
+
+
+async def _translate_ollama_model(
+    agentic: AgenticRuntime,
+) -> str | None:
+    try:
+        return await agentic.ollama.resolve_model('translategemma')
+    except Exception:
+        return None
+
+
 # ---------- chat ----------
+
 
 @ai_router.message(cmd('ai', 'ai', 'ші'))
 async def ai_ask(
     msg: Message,
     client: Client,
     codex: CodexClient,
+    agentic: AgenticRuntime,
     redis: Redis,
     mermaid: MermaidService,
 ):
-    """Single question to Codex."""
+    """Single question to Codex, falling back to local Ollama."""
     prompt = extract_prompt(msg)
     if not prompt:
         await msg.edit(
@@ -88,18 +241,16 @@ async def ai_ask(
         images.append((png, caption))
 
     try:
-        model, effort, _, _ = await get_ai_preferences(
-            redis, codex
-        )
         tools, dispatch = build_ai_tools(mermaid, on_image)
-        response = await codex.chat_with_tools(
+        response, _ = await _chat_with_fallback(
+            codex=codex,
+            agentic=agentic,
+            redis=redis,
             messages=[{'role': 'user', 'text': prompt}],
-            tools=tools,
-            dispatch=dispatch,
             system_instruction=SYSTEM_PROMPT,
             session_id=f'tg:{msg.chat.id}:ask',
-            model=model,
-            reasoning_effort=effort,
+            tools=tools,
+            dispatch=dispatch,
         )
         text, file_text = build_ai_response(
             prompt_title='Q',
@@ -125,10 +276,11 @@ async def ai_chat(
     msg: Message,
     client: Client,
     codex: CodexClient,
+    agentic: AgenticRuntime,
     redis: Redis,
     mermaid: MermaidService,
 ):
-    """Chat with context memory per chat."""
+    """Chat with context memory. Codex first, local Ollama fallback."""
     prompt = extract_prompt(msg)
     if not prompt:
         await msg.edit(
@@ -157,18 +309,16 @@ async def ai_chat(
         images.append((png, caption))
 
     try:
-        model, effort, _, _ = await get_ai_preferences(
-            redis, codex
-        )
         tools, dispatch = build_ai_tools(mermaid, on_image)
-        response = await codex.chat_with_tools(
+        response, _ = await _chat_with_fallback(
+            codex=codex,
+            agentic=agentic,
+            redis=redis,
             messages=history,
-            tools=tools,
-            dispatch=dispatch,
             system_instruction=SYSTEM_PROMPT,
             session_id=f'tg:{chat_id}:chat',
-            model=model,
-            reasoning_effort=effort,
+            tools=tools,
+            dispatch=dispatch,
         )
         history.append({'role': 'assistant', 'text': response})
         text, file_text = build_ai_response(
@@ -204,6 +354,7 @@ async def ai_chat_clear(msg: Message):
 
 # ---------- codex settings ----------
 
+
 @ai_router.message(
     filters.me & filters.command('aimodel', prefixes='.')
 )
@@ -213,9 +364,12 @@ async def ai_model_info(
     redis: Redis,
 ):
     """Show current AI model and effort."""
-    model, effort, model_source, effort_source = (
-        await get_ai_preferences(redis, codex)
-    )
+    (
+        model,
+        effort,
+        model_source,
+        effort_source,
+    ) = await get_ai_preferences(redis, codex)
     await msg.edit(
         '<b>AI Settings</b>\n'
         f'<b>Model:</b> <code>{escape(model)}</code> '
@@ -237,8 +391,8 @@ async def codex_model(
     """Show or update the current Codex model."""
     model = extract_prompt(msg)
     if not model:
-        current_model, _, model_source, _ = (
-            await get_ai_preferences(redis, codex)
+        current_model, _, model_source, _ = await get_ai_preferences(
+            redis, codex
         )
         await msg.edit(
             '<b>Codex model:</b> '
@@ -270,9 +424,12 @@ async def codex_effort(
     """Show or update the current Codex reasoning effort."""
     effort = extract_prompt(msg).lower()
     if not effort:
-        _, current_effort, _, effort_source = (
-            await get_ai_preferences(redis, codex)
-        )
+        (
+            _,
+            current_effort,
+            _,
+            effort_source,
+        ) = await get_ai_preferences(redis, codex)
         allowed = ', '.join(sorted(ALLOWED_EFFORTS))
         await msg.edit(
             '<b>Codex effort:</b> '
@@ -312,9 +469,7 @@ async def codex_reset(
 ):
     """Reset Redis-backed AI settings to defaults."""
     await redis.delete(AI_MODEL_KEY, AI_EFFORT_KEY)
-    model, effort, _, _ = await get_ai_preferences(
-        redis, codex
-    )
+    model, effort, _, _ = await get_ai_preferences(redis, codex)
     await msg.edit(
         '<b>AI Settings Reset</b>\n'
         f'<b>Model:</b> <code>{escape(model)}</code>\n'
@@ -364,12 +519,8 @@ async def codex_auth(
         parse_mode=ParseMode.HTML,
     )
     try:
-        credentials = await codex.complete_oauth(
-            authorization_input
-        )
-        model, effort, _, _ = await get_ai_preferences(
-            redis, codex
-        )
+        credentials = await codex.complete_oauth(authorization_input)
+        model, effort, _, _ = await get_ai_preferences(redis, codex)
         await msg.edit(
             '<b>Codex OAuth:</b> connected.\n'
             f'<b>Model:</b> <code>{escape(model)}</code>\n'
@@ -395,9 +546,12 @@ async def codex_status(
 ):
     """Show Codex auth status."""
     status = await codex.get_auth_status()
-    model, effort, model_source, effort_source = (
-        await get_ai_preferences(redis, codex)
-    )
+    (
+        model,
+        effort,
+        model_source,
+        effort_source,
+    ) = await get_ai_preferences(redis, codex)
     if not status['authenticated']:
         pending = 'yes' if status['pending'] else 'no'
         await msg.edit(
@@ -439,16 +593,13 @@ async def codex_logout(msg: Message, codex: CodexClient):
 
 # ---------- tldr ----------
 
+
 def _sender_name(m: Message) -> str:
     sender = m.from_user
     if sender is not None:
         full = (
             (sender.first_name or '')
-            + (
-                ' ' + sender.last_name
-                if sender.last_name
-                else ''
-            )
+            + (' ' + sender.last_name if sender.last_name else '')
         ).strip()
         return full or sender.username or 'User'
     return getattr(m.sender_chat, 'title', 'Channel')
@@ -458,6 +609,7 @@ def _sender_name(m: Message) -> str:
 async def ai_tldr(
     msg: Message,
     codex: CodexClient,
+    agentic: AgenticRuntime,
     redis: Redis,
     client: Client,
 ):
@@ -499,26 +651,22 @@ async def ai_tldr(
         history.reverse()
         transcript = '\n'.join(history)
 
-        model, effort, _, _ = await get_ai_preferences(
-            redis, codex
-        )
-        response = await codex.generate(
+        response, _ = await _generate_with_fallback(
+            codex=codex,
+            agentic=agentic,
+            redis=redis,
             prompt=(
                 'Summarize this Telegram chat transcript:\n\n'
                 + transcript
             ),
             system_instruction=TLDR_SYSTEM_PROMPT,
             session_id=f'tg:{msg.chat.id}:tldr',
-            model=model,
-            reasoning_effort=effort,
         )
         text = (
             f'<b>📝 TLDR ({len(history)} msgs)</b>\n\n'
             f'{escape(response)}'
         )
-        file_text = (
-            f'TLDR ({len(history)} msgs)\n\n{response}'
-        )
+        file_text = f'TLDR ({len(history)} msgs)\n\n{response}'
         await utils.edit_or_send_as_text_file(
             msg,
             text,
@@ -534,10 +682,9 @@ async def ai_tldr(
 
 # ---------- translate ----------
 
+
 def _looks_like_lang(token: str) -> bool:
-    return len(token) <= 12 and (
-        token.isalpha() or '-' in token
-    )
+    return len(token) <= 12 and (token.isalpha() or '-' in token)
 
 
 def _parse_translate_args(msg: Message) -> tuple[str, str]:
@@ -562,12 +709,11 @@ def _parse_translate_args(msg: Message) -> tuple[str, str]:
     return target, body
 
 
-@ai_router.message(
-    cmd('ai', 'tr', 'translate', 'пер', 'переклад')
-)
+@ai_router.message(cmd('ai', 'tr', 'translate', 'пер', 'переклад'))
 async def ai_translate(
     msg: Message,
     codex: CodexClient,
+    agentic: AgenticRuntime,
     redis: Redis,
 ):
     """Translate text. .tr [lang] <text|reply>."""
@@ -587,23 +733,18 @@ async def ai_translate(
     )
 
     try:
-        model, effort, _, _ = await get_ai_preferences(
-            redis, codex
-        )
-        response = await codex.generate(
+        response, _ = await _generate_with_fallback(
+            codex=codex,
+            agentic=agentic,
+            redis=redis,
             prompt=(
-                f'Target language: {target}\n\n'
-                f'Source text:\n{body}'
+                f'Target language: {target}\n\nSource text:\n{body}'
             ),
             system_instruction=TRANSLATE_SYSTEM_PROMPT,
             session_id=f'tg:{msg.chat.id}:tr',
-            model=model,
-            reasoning_effort=effort,
+            ollama_model=await _translate_ollama_model(agentic),
         )
-        out = (
-            f'<b>🌐 {escape(target)}</b>\n\n'
-            f'{escape(response)}'
-        )
+        out = f'<b>🌐 {escape(target)}</b>\n\n{escape(response)}'
         await utils.edit_or_send_as_text_file(
             msg,
             out,
@@ -612,7 +753,6 @@ async def ai_translate(
         )
     except Exception as e:
         await msg.edit(
-            f'<b>Translate error:</b> '
-            f'<code>{escape(str(e))}</code>',
+            f'<b>Translate error:</b> <code>{escape(str(e))}</code>',
             parse_mode=ParseMode.HTML,
         )

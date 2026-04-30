@@ -1,3 +1,4 @@
+from src.bot.agentic import agentic_router
 from src.bot.acl import acl_router
 from src.bot.ai import ai_router
 from src.bot.fun import fun_router
@@ -7,6 +8,7 @@ from src.bot.notes import notes_router
 from src.bot.quote import quote_router
 
 routers = [
+    agentic_router,
     fun_router,
     intrp_router,
     ai_router,

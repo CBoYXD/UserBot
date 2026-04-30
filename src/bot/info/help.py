@@ -20,10 +20,46 @@ COMMAND_SECTIONS: list[tuple[str, list[tuple[str, str]]]] = [
         ],
     ),
     (
+        'Agent',
+        [
+            ('.agent status', 'Show local agent and Ollama status.'),
+            (
+                '.agent on / .agent off',
+                'Enable or disable message ingestion.',
+            ),
+            (
+                '.agent model [name]',
+                'Show or set local Ollama model.',
+            ),
+            (
+                '.agent ask <prompt>',
+                'Ask the local Ollama agent with chat context.',
+            ),
+            (
+                '.agent memory <query>',
+                'Ask using stored local chat memory.',
+            ),
+            (
+                '.agent context [N]',
+                'Show recent stored context for this chat.',
+            ),
+            (
+                '.agent autoreply on|off',
+                'Configure auto-reply flag for this chat.',
+            ),
+        ],
+    ),
+    (
         '🤖 AI',
         [
-            ('.ai / .ші <prompt>', 'One-shot question to Codex.'),
-            ('.chat / .чат <message>', 'Chat with per-chat memory.'),
+            (
+                '.ai / .ші <prompt>',
+                'One-shot question: Codex first, local Ollama fallback.',
+            ),
+            (
+                '.chat / .чат <message>',
+                'Chat memory: Codex first, local Ollama fallback.',
+            ),
             ('.chatclear', 'Clear current chat history.'),
             (
                 '.tldr / .коротко [N]',
@@ -31,7 +67,7 @@ COMMAND_SECTIONS: list[tuple[str, list[tuple[str, str]]]] = [
             ),
             (
                 '.tr / .translate / .пер / .переклад [lang] <text|reply>',
-                'Translate text (default English).',
+                'Translate text; Ollama fallback prefers translategemma.',
             ),
             ('.aimodel', 'Show current AI model and effort.'),
             ('.codexmodel [name]', 'Show or set Codex model.'),

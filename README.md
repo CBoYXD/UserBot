@@ -55,7 +55,43 @@ docker compose up --build
 Model and effort are stored in Redis, not in `.env`.
 Runtime settings are stored in Redis under `settings:runtime`.
 
-### 5. Run code in Telegram
+AI commands such as `.ai`, `.chat`, `.tldr`, and `.tr` use Codex
+first when OAuth is connected. If Codex is not available or the call
+fails, they fall back to the configured local Ollama chat model. The
+translation fallback looks for a local `translategemma` model first.
+
+### 5. Local Ollama agent
+
+Agentic memory and replies use only local Ollama. There is no Codex or
+OpenAI fallback for this path.
+
+1) Install and start Ollama on the host.
+2) Pull a local chat model, for example `ollama pull qwen3:8b`.
+3) Set `OLLAMA__BASE_URL` and `OLLAMA__CHAT_MODEL` in `.env`.
+4) Start the bot.
+
+When running the bot inside Docker on Windows, `OLLAMA__BASE_URL`
+usually needs to point at the host, for example
+`http://host.docker.internal:11434`.
+
+Commands:
+
+```text
+.agent status
+.agent on
+.agent off
+.agent model [name]
+.agent ask <prompt>
+.agent memory <query>
+.agent context [N]
+.agent autoreply on|off
+```
+
+The agent stores durable local memory in SQLite at
+`AGENTIC__DB_PATH` and keeps hot state, recent context, health cache,
+and cooldowns in Redis. Embeddings are disabled by default.
+
+### 6. Run code in Telegram
 
 1) Execute code in Piston with `.run <language> <code>`
 2) Multi-line also works as `.run <language>` on the first line and code below it
@@ -67,4 +103,4 @@ Runtime settings are stored in Redis under `settings:runtime`.
 8) List snippets with `.code ls`
 9) Delete snippets with `.code rm <name>`
 
-### 6. Enjoy using the userbot
+### 7. Enjoy using the userbot
