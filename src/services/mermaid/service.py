@@ -21,7 +21,7 @@ class MermaidService:
 
     async def render(self, source: str) -> bytes:
         encoded = _encode_source(source)
-        url = f'{MERMAID_INK_URL}/{encoded}'
+        url = f'{MERMAID_INK_URL}/{encoded}?theme=dark&bgColor=!1e1e2e'
         async with httpx.AsyncClient(
             timeout=self._timeout
         ) as http:
