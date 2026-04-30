@@ -8,6 +8,7 @@ deliberately omitted here.
 MODULES: dict[str, set[str]] = {
     'fun': {'type', 'тайп', 'spam', 'спам'},
     'info': {
+        'info', 'help', 'команди', 'допомога',
         'weather', 'погода',
         'crypto', 'price', 'крипто', 'ціна',
     },
