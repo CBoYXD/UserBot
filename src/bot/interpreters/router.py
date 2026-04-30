@@ -8,10 +8,10 @@ from pyrogram.enums import ParseMode
 from pyrogram.types import Message
 from redis.asyncio import Redis
 
-from src.core import utils
 from src.core.router import Router
 from src.services.code_pars.piston import PistonClient
-from src.bot.interpreters import storage
+from src.bot import utils
+from src.bot.interpreters import messages, storage
 from src.bot.interpreters.parsing import (
     extract_code_subcommand,
     extract_named_code,
@@ -40,21 +40,21 @@ async def exec_code(
         result = await piston.execute(parse_code)
         end = process_time()
 
-        ready_msg = utils.get_ready_msg(
-            utils.get_input_msg(
+        ready_msg = messages.get_ready_msg(
+            messages.get_input_msg(
                 parse_code.language,
                 parse_code.code,
             ),
-            utils.get_output_msg(result.output),
-            utils.get_process_time_msg(start, end),
+            messages.get_output_msg(result.output),
+            messages.get_process_time_msg(start, end),
         )
-        ready_text = utils.get_ready_text(
-            utils.get_input_text(
+        ready_text = messages.get_ready_text(
+            messages.get_input_text(
                 parse_code.language,
                 parse_code.code,
             ),
-            utils.get_output_text(result.output),
-            utils.get_process_time_text(start, end),
+            messages.get_output_text(result.output),
+            messages.get_process_time_text(start, end),
         )
         await utils.edit_or_send_as_text_file(
             msg,
@@ -93,17 +93,17 @@ async def exec_python_code(msg: Message):
         end = process_time()
         terminal_output = captured.getvalue()
 
-        ready_msg = utils.get_ready_msg(
-            utils.get_input_msg('python', code),
-            utils.get_output_msg(res),
-            utils.get_from_terminal_msg(terminal_output),
-            utils.get_process_time_msg(start, end),
+        ready_msg = messages.get_ready_msg(
+            messages.get_input_msg('python', code),
+            messages.get_output_msg(res),
+            messages.get_from_terminal_msg(terminal_output),
+            messages.get_process_time_msg(start, end),
         )
-        ready_text = utils.get_ready_text(
-            utils.get_input_text('python', code),
-            utils.get_output_text(res),
-            utils.get_from_terminal_text(terminal_output),
-            utils.get_process_time_text(start, end),
+        ready_text = messages.get_ready_text(
+            messages.get_input_text('python', code),
+            messages.get_output_text(res),
+            messages.get_from_terminal_text(terminal_output),
+            messages.get_process_time_text(start, end),
         )
         await utils.edit_or_send_as_text_file(
             msg,
@@ -191,23 +191,23 @@ async def _code_run(
     result = await piston.execute(parse_code)
     end = process_time()
 
-    ready_msg = utils.get_ready_msg(
+    ready_msg = messages.get_ready_msg(
         f'<b>Snippet:</b> <code>{name}</code>',
-        utils.get_input_msg(
+        messages.get_input_msg(
             parse_code.language,
             parse_code.code,
         ),
-        utils.get_output_msg(result.output),
-        utils.get_process_time_msg(start, end),
+        messages.get_output_msg(result.output),
+        messages.get_process_time_msg(start, end),
     )
-    ready_text = utils.get_ready_text(
+    ready_text = messages.get_ready_text(
         f'Snippet: {name}',
-        utils.get_input_text(
+        messages.get_input_text(
             parse_code.language,
             parse_code.code,
         ),
-        utils.get_output_text(result.output),
-        utils.get_process_time_text(start, end),
+        messages.get_output_text(result.output),
+        messages.get_process_time_text(start, end),
     )
     await utils.edit_or_send_as_text_file(
         msg,
@@ -224,16 +224,16 @@ async def _code_show(
 ) -> None:
     name = extract_snippet_name_from_text(remainder)
     parse_code = await storage.load_snippet(redis, name)
-    ready_msg = utils.get_ready_msg(
+    ready_msg = messages.get_ready_msg(
         f'<b>Snippet:</b> <code>{name}</code>',
-        utils.get_input_msg(
+        messages.get_input_msg(
             parse_code.language,
             parse_code.code,
         ),
     )
-    ready_text = utils.get_ready_text(
+    ready_text = messages.get_ready_text(
         f'Snippet: {name}',
-        utils.get_input_text(
+        messages.get_input_text(
             parse_code.language,
             parse_code.code,
         ),
@@ -260,7 +260,7 @@ async def _code_list(msg: Message, redis: Redis) -> None:
         for name, language in snippets
     ]
     ready_msg = '<b>Saved code</b>\n' + '\n'.join(lines)
-    ready_text = utils.get_ready_text(
+    ready_text = messages.get_ready_text(
         'Saved code',
         '\n'.join(
             f'{name} ({language})'

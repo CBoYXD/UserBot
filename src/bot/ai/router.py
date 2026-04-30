@@ -5,8 +5,8 @@ from pyrogram.enums import ParseMode
 from pyrogram.types import Message
 from redis.asyncio import Redis
 
-from src.core import utils
 from src.core.router import Router
+from src.bot import utils
 from src.bot.ai.helpers import build_ai_response, extract_prompt
 from src.bot.ai.prefs import (
     AI_EFFORT_KEY,
