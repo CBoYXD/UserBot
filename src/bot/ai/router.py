@@ -1,3 +1,4 @@
+import io
 from html import escape
 
 from pyrogram import Client, filters
@@ -24,7 +25,9 @@ from src.bot.ai.prompts import (
     TLDR_SYSTEM_PROMPT,
     TRANSLATE_SYSTEM_PROMPT,
 )
+from src.bot.ai.tools import build_ai_tools
 from src.services.codex import CodexClient
+from src.services.mermaid import MermaidService
 
 
 ai_router = Router('ai')
@@ -34,13 +37,36 @@ _chat_histories: dict[int, list[dict[str, str]]] = {}
 MAX_HISTORY = 20
 
 
+async def _flush_images(
+    client: Client,
+    msg: Message,
+    images: list[tuple[bytes, str | None]],
+) -> None:
+    target_id = (
+        msg.reply_to_message.id
+        if msg.reply_to_message
+        else msg.id
+    )
+    for png, caption in images:
+        bio = io.BytesIO(png)
+        bio.name = 'mermaid.png'
+        await client.send_photo(
+            chat_id=msg.chat.id,
+            photo=bio,
+            caption=caption,
+            reply_to_message_id=target_id,
+        )
+
+
 # ---------- chat ----------
 
 @ai_router.message(cmd('ai', 'ai', 'ші'))
 async def ai_ask(
     msg: Message,
+    client: Client,
     codex: CodexClient,
     redis: Redis,
+    mermaid: MermaidService,
 ):
     """Single question to Codex."""
     prompt = extract_prompt(msg)
@@ -56,12 +82,20 @@ async def ai_ask(
         parse_mode=ParseMode.HTML,
     )
 
+    images: list[tuple[bytes, str | None]] = []
+
+    async def on_image(png: bytes, caption: str | None) -> None:
+        images.append((png, caption))
+
     try:
         model, effort, _, _ = await get_ai_preferences(
             redis, codex
         )
-        response = await codex.generate(
-            prompt=prompt,
+        tools, dispatch = build_ai_tools(mermaid, on_image)
+        response = await codex.chat_with_tools(
+            messages=[{'role': 'user', 'text': prompt}],
+            tools=tools,
+            dispatch=dispatch,
             system_instruction=SYSTEM_PROMPT,
             session_id=f'tg:{msg.chat.id}:ask',
             model=model,
@@ -78,6 +112,7 @@ async def ai_ask(
             file_text=file_text,
             filename=f'ai-response-{msg.id}.txt',
         )
+        await _flush_images(client, msg, images)
     except Exception as e:
         await msg.edit(
             f'<b>AI Error:</b> <code>{escape(str(e))}</code>',
@@ -88,8 +123,10 @@ async def ai_ask(
 @ai_router.message(cmd('ai', 'chat', 'чат'))
 async def ai_chat(
     msg: Message,
+    client: Client,
     codex: CodexClient,
     redis: Redis,
+    mermaid: MermaidService,
 ):
     """Chat with context memory per chat."""
     prompt = extract_prompt(msg)
@@ -114,12 +151,20 @@ async def ai_chat(
         parse_mode=ParseMode.HTML,
     )
 
+    images: list[tuple[bytes, str | None]] = []
+
+    async def on_image(png: bytes, caption: str | None) -> None:
+        images.append((png, caption))
+
     try:
         model, effort, _, _ = await get_ai_preferences(
             redis, codex
         )
-        response = await codex.chat(
+        tools, dispatch = build_ai_tools(mermaid, on_image)
+        response = await codex.chat_with_tools(
             messages=history,
+            tools=tools,
+            dispatch=dispatch,
             system_instruction=SYSTEM_PROMPT,
             session_id=f'tg:{chat_id}:chat',
             model=model,
@@ -137,6 +182,7 @@ async def ai_chat(
             file_text=file_text,
             filename=f'chat-response-{msg.id}.txt',
         )
+        await _flush_images(client, msg, images)
     except Exception as e:
         history.pop()
         await msg.edit(

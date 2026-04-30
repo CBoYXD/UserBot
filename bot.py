@@ -17,6 +17,7 @@ from src.core.dispatcher import Dispatcher
 from src.services.code_pars.piston import PistonClient
 from src.services.codex import CodexClient
 from src.services.crypto import CryptoService
+from src.services.mermaid import MermaidService
 from src.services.quote import QuoteService
 from src.services.weather import WeatherService
 from src.bot import routers
@@ -65,6 +66,7 @@ def build_runtime(config: Config):
         weather=WeatherService(),
         crypto=CryptoService(),
         quote=QuoteService(),
+        mermaid=MermaidService(),
     )
     return client, redis, dispatcher
 
